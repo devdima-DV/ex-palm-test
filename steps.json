@@ -1,0 +1,523 @@
+{
+  "schema": "funnel-steps/v2",
+  "funnel": "ex",
+  "name": "Ex Compatibility Reading",
+  "type": "next-static",
+  "generatedFrom": "app/funnel.ts FLOW + SCREENS",
+  "generatedAt": "2026-06-26T22:22:59.737Z",
+  "defaultLocale": "en",
+  "locales": [
+    "en",
+    "es",
+    "ro",
+    "fr",
+    "de",
+    "ja"
+  ],
+  "stepUrl": {
+    "en": "/{step}/",
+    "other": "/{lang}/{step}/"
+  },
+  "entry": "prelanding",
+  "sections": [
+    {
+      "id": "intro",
+      "label": "Intro",
+      "color": "#6ea8fe"
+    },
+    {
+      "id": "quiz",
+      "label": "Quiz",
+      "color": "#7c8aa5"
+    },
+    {
+      "id": "capture",
+      "label": "Data capture",
+      "color": "#4fd1c5"
+    },
+    {
+      "id": "analysis",
+      "label": "Analysis",
+      "color": "#818cf8"
+    },
+    {
+      "id": "monetize",
+      "label": "Monetization",
+      "color": "#ff9eb5"
+    },
+    {
+      "id": "upsell",
+      "label": "Upsells",
+      "color": "#fb923c"
+    }
+  ],
+  "summary": {
+    "total": 44,
+    "questions": 13,
+    "inputs": 9,
+    "paywalls": 4,
+    "upsells": 4,
+    "branches": 4
+  },
+  "steps": [
+    {
+      "id": "prelanding",
+      "order": 0,
+      "label": "Start",
+      "title": "Prelanding",
+      "kind": "entry",
+      "section": "intro"
+    },
+    {
+      "id": "gender",
+      "order": 1,
+      "label": "Gender",
+      "title": "First, tell us about yourself",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "wpGoal",
+      "order": 2,
+      "label": "Wpgoal",
+      "title": "What is your goal in exploring this connection?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "goalInfo",
+      "order": 3,
+      "label": "Goalinfo",
+      "title": "Your path to clarity",
+      "kind": "info",
+      "section": "quiz"
+    },
+    {
+      "id": "userBirthdate",
+      "order": 4,
+      "label": "Date of birth",
+      "title": "What's your date of birth?",
+      "kind": "input",
+      "section": "capture"
+    },
+    {
+      "id": "userBirthTime",
+      "order": 5,
+      "label": "Time of birth",
+      "title": "UserBirthTime",
+      "kind": "input",
+      "section": "capture",
+      "flags": [
+        "fork"
+      ]
+    },
+    {
+      "id": "userBirthTimeSplit",
+      "order": 6,
+      "label": "Time of birth",
+      "title": "It's okay!",
+      "kind": "info",
+      "section": "quiz"
+    },
+    {
+      "id": "userTime",
+      "order": 7,
+      "label": "Time of birth",
+      "title": "What time were you born?",
+      "kind": "input",
+      "section": "capture",
+      "flags": [
+        "branch",
+        "jump"
+      ],
+      "next": "exGender",
+      "branchOf": "userBirthTime",
+      "branchLabel": "Knows time"
+    },
+    {
+      "id": "userNoTime",
+      "order": 8,
+      "label": "Usernotime",
+      "title": "It's okay!",
+      "kind": "info",
+      "section": "quiz",
+      "flags": [
+        "branch",
+        "jump"
+      ],
+      "next": "exGender",
+      "branchOf": "userBirthTime",
+      "branchLabel": "Doesn't know"
+    },
+    {
+      "id": "exGender",
+      "order": 9,
+      "label": "Exgender",
+      "title": "Tell us about your ex",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "exBirthdate",
+      "order": 10,
+      "label": "Date of birth",
+      "title": "When was your ex born?",
+      "kind": "input",
+      "section": "capture"
+    },
+    {
+      "id": "exBirthTime",
+      "order": 11,
+      "label": "Time of birth",
+      "title": "ExBirthTime",
+      "kind": "input",
+      "section": "capture",
+      "flags": [
+        "fork"
+      ]
+    },
+    {
+      "id": "exBirthTimeSplit",
+      "order": 12,
+      "label": "Time of birth",
+      "title": "It's okay!",
+      "kind": "info",
+      "section": "quiz"
+    },
+    {
+      "id": "exTime",
+      "order": 13,
+      "label": "Time of birth",
+      "title": "What time was your ex born?",
+      "kind": "input",
+      "section": "capture",
+      "flags": [
+        "branch",
+        "jump"
+      ],
+      "next": "relBefore",
+      "branchOf": "exBirthTime",
+      "branchLabel": "Knows time"
+    },
+    {
+      "id": "exNoTime",
+      "order": 14,
+      "label": "Exnotime",
+      "title": "No worries!",
+      "kind": "info",
+      "section": "quiz",
+      "flags": [
+        "branch",
+        "jump"
+      ],
+      "next": "relBefore",
+      "branchOf": "exBirthTime",
+      "branchLabel": "Doesn't know"
+    },
+    {
+      "id": "relBefore",
+      "order": 15,
+      "label": "Relbefore",
+      "title": "What best describes your relationship before the breakup?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "relDuration",
+      "order": 16,
+      "label": "Relduration",
+      "title": "How long were you together?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "decidedEndThings",
+      "order": 17,
+      "label": "Decidedendthings",
+      "title": "Who decided to end things?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "relSatisfaction",
+      "order": 18,
+      "label": "Relsatisfaction",
+      "title": "I was really satisfied with our relationship",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "closerToClarity",
+      "order": 19,
+      "label": "Closertoclarity",
+      "title": "One step closer to clarity",
+      "kind": "info",
+      "section": "quiz"
+    },
+    {
+      "id": "breakupReason",
+      "order": 20,
+      "label": "Breakupreason",
+      "title": "What do you think the main reason for the breakup was?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "exCopingAfterBreakup",
+      "order": 21,
+      "label": "Excopingafterbreakup",
+      "title": "How do you think your ex feels about the breakup?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "exNewRelationship",
+      "order": 22,
+      "label": "Exnewrelationship",
+      "title": "Have you been in touch since the breakup?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "realChanceGetBack",
+      "order": 23,
+      "label": "Realchancegetback",
+      "title": "You still have a real chance to get back together",
+      "kind": "info",
+      "section": "quiz"
+    },
+    {
+      "id": "universeSigns",
+      "order": 24,
+      "label": "Universesigns",
+      "title": "Do you believe the Universe sends you signs or messages?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "dreamDynamic",
+      "order": 25,
+      "label": "Dreamdynamic",
+      "title": "Do you feel that coincidences often carry hidden meaning for you?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "dreamLifestyle",
+      "order": 26,
+      "label": "Dreamlifestyle",
+      "title": "Do you believe people appear in your life for a reason, not by chance?",
+      "kind": "question",
+      "section": "quiz"
+    },
+    {
+      "id": "dreamInfo",
+      "order": 27,
+      "label": "Dreaminfo",
+      "title": "We can already see the signs the Universe is showing you",
+      "kind": "info",
+      "section": "quiz"
+    },
+    {
+      "id": "scanPreview",
+      "order": 28,
+      "label": "Scanpreview",
+      "title": "Let’s scan your palm to check your ex compatibility",
+      "kind": "info",
+      "section": "quiz"
+    },
+    {
+      "id": "scan",
+      "order": 29,
+      "label": "Photo scan",
+      "title": "Take a photo of your left palm as illustrated below",
+      "kind": "scan",
+      "section": "analysis"
+    },
+    {
+      "id": "scanAnalysing",
+      "order": 30,
+      "label": "Analyzing",
+      "title": "Analysing your palm lines",
+      "kind": "loader",
+      "section": "analysis"
+    },
+    {
+      "id": "palmResult",
+      "order": 31,
+      "label": "Result",
+      "title": "We analysed the photo you took",
+      "kind": "reveal",
+      "section": "analysis"
+    },
+    {
+      "id": "report",
+      "order": 32,
+      "label": "Analyzing",
+      "title": "We are crafting a detailed palm reading for you",
+      "kind": "loader",
+      "section": "analysis"
+    },
+    {
+      "id": "email",
+      "order": 33,
+      "label": "Email",
+      "title": "Make sure your results",
+      "kind": "email",
+      "section": "capture"
+    },
+    {
+      "id": "emailConfirm",
+      "order": 34,
+      "label": "Email",
+      "title": "EmailConfirm",
+      "kind": "email",
+      "section": "capture"
+    },
+    {
+      "id": "onboarding",
+      "order": 35,
+      "label": "Result",
+      "title": "Onboarding",
+      "kind": "reveal",
+      "section": "analysis"
+    },
+    {
+      "id": "trialChoice",
+      "order": 36,
+      "label": "Pricing",
+      "title": "Choose a Trial Price",
+      "kind": "paywall",
+      "section": "monetize",
+      "isPaywall": true
+    },
+    {
+      "id": "trialPayment",
+      "order": 37,
+      "label": "Checkout",
+      "title": "Get answers",
+      "kind": "payment",
+      "section": "monetize",
+      "modals": [
+        {
+          "label": "Payment form",
+          "trigger": "checkout CTA"
+        }
+      ],
+      "flags": [
+        "jump"
+      ],
+      "next": "upsells",
+      "isPaywall": true,
+      "isPayment": true
+    },
+    {
+      "id": "additionalDiscount",
+      "order": 38,
+      "label": "Discount offer",
+      "title": "Save 70% off — a secret discount just for you",
+      "kind": "downsell",
+      "section": "upsell",
+      "flags": [
+        "jump"
+      ],
+      "next": "trialPaymentWithDiscount",
+      "isPaywall": true
+    },
+    {
+      "id": "trialPaymentWithDiscount",
+      "order": 39,
+      "label": "Discount offer",
+      "title": "TrialPaymentWithDiscount",
+      "kind": "downsell",
+      "section": "upsell",
+      "flags": [
+        "jump"
+      ],
+      "next": "upsells",
+      "isPaywall": true
+    },
+    {
+      "id": "upsells",
+      "order": 40,
+      "label": "Upsell",
+      "title": "Choose your sign-up offer",
+      "kind": "upsell",
+      "section": "upsell"
+    },
+    {
+      "id": "trialCredits",
+      "order": 41,
+      "label": "Upsell",
+      "title": "More for you",
+      "kind": "upsell",
+      "section": "upsell"
+    },
+    {
+      "id": "phoneNumber",
+      "order": 42,
+      "label": "Phone number",
+      "title": "Your Ex Compatibility Reading is almost ready...",
+      "kind": "input",
+      "section": "capture"
+    },
+    {
+      "id": "askOnboarding",
+      "order": 43,
+      "label": "Askonboarding",
+      "title": "Your Ex Compatibility Reading is on the way",
+      "kind": "info",
+      "section": "quiz"
+    }
+  ],
+  "branching": [
+    {
+      "step": "userBirthTime",
+      "by": "yes-no",
+      "options": [
+        {
+          "key": "yes",
+          "label": "Knows time",
+          "target": "userTime"
+        },
+        {
+          "key": "no",
+          "label": "Doesn't know",
+          "target": "userNoTime"
+        }
+      ]
+    },
+    {
+      "step": "exBirthTime",
+      "by": "yes-no",
+      "options": [
+        {
+          "key": "yes",
+          "label": "Knows time",
+          "target": "exTime"
+        },
+        {
+          "key": "no",
+          "label": "Doesn't know",
+          "target": "exNoTime"
+        }
+      ]
+    }
+  ],
+  "paymentStep": "trialPayment",
+  "paywallSteps": [
+    "trialChoice",
+    "trialPayment",
+    "additionalDiscount",
+    "trialPaymentWithDiscount"
+  ],
+  "nextOverrides": {
+    "userTime": "exGender",
+    "userNoTime": "exGender",
+    "exTime": "relBefore",
+    "exNoTime": "relBefore",
+    "trialPayment": "upsells",
+    "trialPaymentWithDiscount": "upsells",
+    "additionalDiscount": "trialPaymentWithDiscount"
+  }
+}

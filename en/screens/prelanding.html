@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Magnora</title>
+<style>html,body{margin:0;height:100%;background:#0c0a18;color:#cfc8e0;font-family:system-ui,sans-serif}.c{height:100%;display:flex;align-items:center;justify-content:center}</style>
+<script>
+  // Legacy entry URL (/en/screens/prelanding.html). Forward to the funnel start,
+  // preserving EVERY query param (?pix, ?utm_*, ?test_event_code, ...) + hash.
+  (function () {
+    try {
+      var target = '/prelanding/' + (location.search || '') + (location.hash || '');
+      location.replace(target);   // replace() so Back doesn't bounce here
+    } catch (e) {
+      location.href = '/prelanding/';
+    }
+  })();
+</script>
+<!-- JS-disabled fallback (params can't be forwarded without JS) -->
+<noscript><meta http-equiv="refresh" content="0;url=/prelanding/"></noscript>
+</head>
+<body>
+  <div class="c">
+    <span>Loading… <a id="go" href="/prelanding/" style="color:#e9c887">Continue</a></span>
+  </div>
+  <script>try{document.getElementById('go').href='/prelanding/'+(location.search||'')+(location.hash||'');}catch(e){}</script>
+</body>
+</html>
