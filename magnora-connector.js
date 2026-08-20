@@ -164,7 +164,10 @@
       // 356px = at/under OdysPay's own card max-width, so their white form FILLS the modal
       // edge-to-edge (no dark page-background padding bands around it — "влитая"). Wider
       // than this and OdysPay centres its card and shows its dark page bg on the sides.
-      '#mg-cn .box.mg-pay{max-width:356px;width:100%;height:86vh;max-height:820px;padding:0;overflow:hidden;position:relative;border:none;background:#fff}' +
+      // 720px ≈ just under OdysPay's card content height, so the white form fills the modal
+      // top-to-bottom (their dark page bg doesn't show above/below the vertically-centred card);
+      // if the form is taller it just scrolls inside. 356px width keeps it filling side-to-side.
+      '#mg-cn .box.mg-pay{max-width:356px;width:100%;height:86vh;max-height:720px;padding:0;overflow:hidden;position:relative;border:none;background:#fff}' +
       '#mg-cn .box.mg-pay iframe{width:100%;height:100%;border:0;display:block;background:#fff}' +
       '#mg-cn .mg-pay-x{position:absolute;top:10px;right:10px;z-index:3;border:0;width:34px;height:34px;border-radius:50%;padding:0;font-size:15px;line-height:1;cursor:pointer;background:rgba(20,16,40,.82);color:#fff}' +
       // one loader covering the whole modal until OdysPay paints (removed on iframe load)
