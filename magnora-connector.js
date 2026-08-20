@@ -178,7 +178,20 @@
       '#mg-cn .addb[disabled]{opacity:1;border-color:#1ca14e;color:#1ca14e}' +
       '#mg-cn .err{color:#ef5350;font-size:13px;margin:8px 0 0;min-height:16px}' +
       '#mg-cn .spin{width:42px;height:42px;border:3px solid #ece8f3;border-top-color:#5b3fe0;border-radius:50%;animation:mgspin 1s linear infinite;margin:18px auto}' +
-      '@keyframes mgspin{to{transform:rotate(360deg)}}';
+      '@keyframes mgspin{to{transform:rotate(360deg)}}' +
+      // ── downsell: premium dark cosmic Magnora card (overrides the light .box) ──
+      '#mg-cn .box.mg-ds{background:radial-gradient(125% 95% at 50% -12%,#271d4c 0%,#16121f 48%,#0b0912 100%);border:1px solid rgba(150,120,230,.30);border-radius:26px;max-width:392px;padding:38px 26px 24px;color:#F3EEE4;text-align:center;position:relative;overflow:hidden;box-shadow:0 34px 100px rgba(18,8,48,.62),inset 0 1px 0 rgba(255,255,255,.06)}' +
+      '#mg-cn .mg-ds-glow{position:absolute;top:-70px;left:50%;transform:translateX(-50%);width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(124,92,255,.55),rgba(124,92,255,0) 66%);pointer-events:none}' +
+      '#mg-cn .mg-ds-star{position:relative;font-size:20px;color:#E9C36B;letter-spacing:.35em;margin-bottom:8px}' +
+      '#mg-cn .mg-ds-title{position:relative;font-family:"Cormorant Garamond","Cormorant",Georgia,serif;font-weight:600;font-size:30px;line-height:1.14;margin:0 0 9px;color:#F7F2EA}' +
+      '#mg-cn .mg-ds-sub{position:relative;font-size:14px;line-height:1.55;color:#B7B0C8;margin:0 auto 20px;max-width:300px}' +
+      '#mg-cn .mg-ds-price{position:relative;display:flex;align-items:baseline;justify-content:center;gap:12px;margin:0 0 22px}' +
+      '#mg-cn .mg-ds-now{font-family:"Cormorant Garamond","Cormorant",Georgia,serif;font-weight:700;font-size:46px;line-height:1;background:linear-gradient(180deg,#FFE7A6,#F3AE1C);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}' +
+      '#mg-cn .mg-ds-was{font-size:18px;color:#78708C;text-decoration:line-through}' +
+      '#mg-cn .mg-ds-yes{position:relative;width:100%;border:0;border-radius:16px;padding:16px;font:700 16px "Open Sans",system-ui,sans-serif;color:#fff;cursor:pointer;background:linear-gradient(135deg,#8E6DFF,#5B3FE0);box-shadow:0 14px 38px -12px rgba(124,92,255,.85),inset 0 1px 0 rgba(255,255,255,.28);transition:transform .12s ease}' +
+      '#mg-cn .mg-ds-yes:active{transform:translateY(1px)}' +
+      '#mg-cn .mg-ds-no{width:100%;margin-top:8px;border:0;background:transparent;color:#8F88A0;font:600 13.5px "Open Sans",system-ui,sans-serif;cursor:pointer;padding:11px}' +
+      '#mg-cn .mg-ds-no:hover{color:#B7B0C8}';
     document.head.appendChild(s);
   }
   function overlay() {
@@ -421,17 +434,33 @@
   }
 
   // ── Exit-intent downsell — re-checkout at the discounted price ──
+  // Load the serif (Cormorant Garamond) once, so the downsell headline matches the
+  // funnel's cosmic display type even if the paywall hasn't loaded it yet.
+  function ensureSerif() {
+    if (document.getElementById('mg-ds-font')) return;
+    var l = document.createElement('link'); l.id = 'mg-ds-font'; l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap';
+    document.head.appendChild(l);
+  }
   function showDownsell() {
     track('downsell_shown');
-    var box = overlay();
-    var priceLine = (PRICING && PRICING.downsell_price)
-      ? '<p class="sub"><b style="color:#5b3fe0;font-size:20px">$' + Number(PRICING.downsell_price).toFixed(2) + '</b>'
-        + (PRICING.full_price ? ' <s style="color:#9a8fb5">$' + Number(PRICING.full_price).toFixed(2) + '</s>' : '') + '</p>'
+    ensureSerif();
+    var box = overlay(); box.className = 'box mg-ds';
+    var now = (PRICING && PRICING.downsell_price != null) ? Number(PRICING.downsell_price)
+            : (buyer.price != null ? Math.max(0, buyer.price * 0.5) : null);
+    var was = (PRICING && PRICING.full_price != null) ? Number(PRICING.full_price)
+            : (buyer.price != null ? buyer.price : null);
+    var priceLine = (now != null)
+      ? '<div class="mg-ds-price"><span class="mg-ds-now">$' + now.toFixed(2) + '</span>'
+        + (was != null && was > now ? '<span class="mg-ds-was">$' + was.toFixed(2) + '</span>' : '') + '</div>'
       : '';
     box.innerHTML =
-      '<h2>' + T.dsTitle + '</h2><p class="sub">' + T.dsSub + '</p>' + priceLine +
-      '<button class="cta" id="mg-ds-yes">' + T.dsYes + '</button>' +
-      '<button class="addb" id="mg-ds-no" style="width:100%;margin-top:10px;border-radius:26px;padding:13px">' + T.dsNo + '</button>';
+      '<div class="mg-ds-glow"></div>' +
+      '<div class="mg-ds-star">✦</div>' +
+      '<h2 class="mg-ds-title">' + T.dsTitle + '</h2>' +
+      '<p class="mg-ds-sub">' + T.dsSub + '</p>' + priceLine +
+      '<button class="mg-ds-yes" id="mg-ds-yes">' + T.dsYes + '</button>' +
+      '<button class="mg-ds-no" id="mg-ds-no">' + T.dsNo + '</button>';
     box.querySelector('#mg-ds-yes').addEventListener('click', function () {
       // The conversion goal fires on real payment success, not on this click.
       startAndCheckout(buyer.email, null, 'discount');   // backend applies the downsell price
