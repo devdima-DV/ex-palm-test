@@ -155,8 +155,6 @@
     // payment window feels native to the funnel, not a foreign dark popup.
     s.textContent =
       '#mg-cn{position:fixed;inset:0;z-index:2147483600;background:rgba(20,16,40,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:"Open Sans",system-ui,-apple-system,sans-serif}' +
-      // prewarm: overlay is in the DOM (so the OdysPay iframe loads) but hidden & inert; un-hidden instantly on click
-      '#mg-cn.mg-prewarm-hidden{visibility:hidden;opacity:0;pointer-events:none}' +
       '#mg-cn .box{background:#fff;border:1px solid #ece8f3;border-radius:20px;max-width:440px;width:100%;max-height:92vh;overflow:auto;color:#1c1c1c;padding:24px;box-shadow:0 24px 80px rgba(20,16,40,.28)}' +
       '#mg-cn .box.mg-pay{max-width:520px;padding:0;overflow:hidden;display:flex;flex-direction:column}' +
       '#mg-cn .box.mg-pay iframe{height:80vh;max-height:760px;border-radius:0}' +
@@ -347,12 +345,13 @@
     buildPayBox(overlay(), url);
   }
 
-  // ── Prewarm the OdysPay form BEFORE the click ──
-  // Runs start+checkout ahead of time and builds the payment overlay HIDDEN, so the
-  // iframe loads in the background. On click we only un-hide it (the iframe is never
-  // reparented — that would reload it). payment_attempt is NOT fired here; it fires on
-  // the reveal, so the Yandex goal still marks the click-driven display of the form.
-  var prewarm = { status: 'idle', price: null, variant: 'full', url: null, overlay: null };
+  // ── Prewarm the checkout BEFORE the click ──
+  // Runs start+checkout ahead of time so the payment_url is ready, but does NOT load the
+  // OdysPay form (no hidden iframe): the form's own "loaded/viewed" beacon must fire only
+  // when the buyer actually SEES the form. So the iframe is created on the click reveal —
+  // the click then skips the two API round-trips (session + checkout) and shows the form
+  // immediately, while OdysPay registers the form load only on the click-driven display.
+  var prewarm = { status: 'idle', price: null, variant: 'full', url: null };
   function prewarmCheckout(email, price, variant) {
     if (SUCCESSPAY) return;                                   // QA bypass — no real form to warm
     if (!email || !EMRE.test(email)) return;                 // checkout needs a valid email
@@ -375,23 +374,8 @@
         if (price) body.price = price;
         return post('/funnels/checkout', body);
       })
-      .then(function (co) {
-        if (document.getElementById('mg-cn')) { prewarm.status = 'idle'; return; }  // a real overlay opened meanwhile → abort quietly
-        css();
-        var ov = document.createElement('div'); ov.id = 'mg-cn'; ov.className = 'mg-prewarm-hidden'; if (RTL) ov.dir = 'rtl';
-        var box = document.createElement('div'); ov.appendChild(box); document.body.appendChild(ov);
-        buildPayBox(box, co.payment_url);
-        prewarm.url = co.payment_url; prewarm.overlay = ov; prewarm.status = 'ready';
-      })
-      .catch(function () { prewarm.status = 'failed'; prewarm.overlay = null; });
-  }
-  // Reveal the prewarmed form on the pay-button click: un-hide the already-loaded overlay
-  // and fire payment_attempt HERE, on the click-driven display of the form.
-  function revealPrewarm(email, price) {
-    buyer.email = email; buyer.price = (price == null ? null : price); buyer.variant = 'full';
-    var ov = prewarm.overlay; prewarm.overlay = null; prewarm.status = 'consumed';
-    if (ov) ov.className = '';                    // drop mg-prewarm-hidden → instantly visible
-    track('payment_attempt');                     // goal: form shown due to the button click
+      .then(function (co) { prewarm.url = co.payment_url; prewarm.status = 'ready'; })   // URL ready; the OdysPay form is loaded later, on the reveal
+      .catch(function () { prewarm.status = 'failed'; prewarm.url = null; });
   }
 
   // ── Exit-intent downsell — re-checkout at the discounted price ──
@@ -525,8 +509,7 @@
     var re = M.payCtaRe || /(get my|unlock|reveal|see (my|your)|get (your )?(results|report|reading|prediction|plan)|start (your )?(plan|trial)|subscribe|continue to pay|complete (my )?order|\bpay\b|checkout|get started)/i;
     document.addEventListener('click', function (e) {
       try {
-        var _ov = document.getElementById('mg-cn');
-        if (_ov && _ov.className.indexOf('mg-prewarm-hidden') < 0) return;   // a VISIBLE overlay is already open (hidden prewarm one is fine)
+        if (document.getElementById('mg-cn')) return;        // OdysPay already open
         var t = e.target.closest && e.target.closest('button,a,[role="button"],[data-testid]');
         if (!t) return;
         var txt = (t.textContent || '').trim().toLowerCase();
@@ -544,11 +527,15 @@
           buyer.email = getEmail(); buyer.price = _price; buyer.variant = 'full';
           postPaid(); return;
         }
-        // If the OdysPay form was prewarmed for this same price, show it INSTANTLY
-        // (payment_attempt fires inside revealPrewarm, on this click). Otherwise run
-        // the normal checkout (also covers a price change since prewarm time).
-        if (prewarm.status === 'ready' && prewarm.overlay && prewarm.price === (_price == null ? null : _price)) {
-          revealPrewarm(getEmail(), _price); return;
+        // If the checkout was prewarmed for this same price, show the form using the
+        // ready payment_url — this skips the start+checkout round-trips, and the OdysPay
+        // form loads NOW (on this click), so OdysPay registers the form load only once the
+        // buyer actually sees it. payment_attempt fires inside showPayment (on display).
+        // Otherwise run the normal checkout (also covers a price change since prewarm).
+        if (prewarm.status === 'ready' && prewarm.url && prewarm.price === (_price == null ? null : _price)) {
+          buyer.email = getEmail(); buyer.price = (_price == null ? null : _price); buyer.variant = 'full';
+          prewarm.status = 'consumed';
+          showPayment(prewarm.url); return;
         }
         startAndCheckout(getEmail(), _price);
       } catch (x) {}
