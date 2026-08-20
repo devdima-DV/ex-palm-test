@@ -162,8 +162,11 @@
       // Width 316px is BELOW OdysPay's desktop-layout breakpoint (~320px), so their form
       // uses its full-width MOBILE layout and fills the modal — no dark page-bg side bands,
       // on desktop too — while staying wide enough that email/name don't truncate.
-      '#mg-cn .box.mg-pay{max-width:316px;padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative;background:#fff}' +
-      '#mg-cn .box.mg-pay iframe{height:80vh;max-height:760px;border-radius:0;border:0;display:block;background:#fff}' +
+      '#mg-cn .box.mg-pay{max-width:316px;height:82vh;max-height:740px;padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative;background:#fff}' +
+      // iframe lives in a wrap and is nudged up 36px so OdysPay's dark top page-padding is
+      // cropped and its form sits flush under the bar (no dark seam between bar and form).
+      '#mg-cn .mg-pay-wrap{position:relative;flex:1 1 auto;min-height:0;overflow:hidden}' +
+      '#mg-cn .box.mg-pay iframe{position:absolute;left:0;top:-36px;width:100%;height:calc(100% + 36px);border:0;display:block;background:#fff}' +
       '#mg-cn .mg-pay-bar{display:flex;align-items:center;justify-content:flex-end;flex:0 0 auto;height:46px;padding:0 12px;background:#fff;border-bottom:1px solid #efecf6}' +
       '#mg-cn .mg-pay-x{border:0;width:34px;height:34px;border-radius:50%;padding:0;font-size:15px;line-height:1;cursor:pointer;background:#1c1430;color:#fff}' +
       // loader over the iframe (below the bar) until OdysPay paints; removed on iframe load
@@ -363,12 +366,14 @@
   function buildPayBox(box, url) {
     box.className = 'box mg-pay';
     addPayBar(box);                                // white bar + close (reference)
+    var wrap = document.createElement('div'); wrap.className = 'mg-pay-wrap';
     var f = document.createElement('iframe');
     f.setAttribute('allow', 'payment');           // REQUIRED for Apple/Google Pay
     var L = addPayLoader(box);
     L.onIframe(f);
     f.src = url;
-    box.insertBefore(f, L.load);                   // order: bar, iframe, loader
+    wrap.appendChild(f);
+    box.insertBefore(wrap, L.load);                // order: bar, wrap(iframe), loader
     return f;
   }
   // Open the pay modal IMMEDIATELY on click with a single loader, then drop the OdysPay
@@ -378,7 +383,9 @@
     buyer.email = email; buyer.price = (price == null ? null : price); buyer.variant = variant || 'full';
     var box = overlay(); box.className = 'box mg-pay';       // open immediately (reference modal)
     addPayBar(box);                                           // white bar + close
+    var wrap = document.createElement('div'); wrap.className = 'mg-pay-wrap';
     var L = addPayLoader(box);                                // loader over the iframe area
+    box.insertBefore(wrap, L.load);                          // order: bar, wrap, loader
     track('payment_attempt');                                // form shown due to the button click
     var urlP;
     if (prewarm.status === 'loading' && prewarm.promise && prewarm.price === (price == null ? null : price)) {
@@ -386,7 +393,7 @@
     } else { urlP = doStartCheckout(email, price, variant); }
     urlP.then(function (url) {
       var f = document.createElement('iframe'); f.setAttribute('allow', 'payment');
-      L.onIframe(f); f.src = url; box.insertBefore(f, L.load);   // loader stays on top until the form paints
+      L.onIframe(f); f.src = url; wrap.appendChild(f);           // iframe into the wrap; loader stays on top
     }).catch(function () {
       box.className = 'box';                                  // back to the normal padded card for the error
       box.innerHTML = '<h2 style="text-align:center">Magnora</h2><p class="err" style="text-align:center">' + T.err + '</p><button class="cta" id="rt">' + T.cont + '</button>';
