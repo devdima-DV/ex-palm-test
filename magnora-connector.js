@@ -158,12 +158,14 @@
       // prewarm: overlay is in the DOM (iframe fully loads) but hidden & inert; un-hidden instantly on click
       '#mg-cn.mg-prewarm-hidden{visibility:hidden;opacity:0;pointer-events:none}' +
       '#mg-cn .box{background:#fff;border:1px solid #ece8f3;border-radius:20px;max-width:440px;width:100%;max-height:92vh;overflow:auto;color:#1c1c1c;padding:24px;box-shadow:0 24px 80px rgba(20,16,40,.28)}' +
-      '#mg-cn .box.mg-pay{max-width:520px;padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative}' +
-      '#mg-cn .box.mg-pay iframe{height:80vh;max-height:760px;border-radius:0}' +
-      // loader shown over the iframe until OdysPay paints (removed on iframe load) — perceived instant open
-      '#mg-cn .mg-pay-load{position:absolute;left:0;right:0;top:46px;bottom:0;display:flex;align-items:center;justify-content:center;background:#fff}' +
-      '#mg-cn .mg-pay-bar{display:flex;align-items:center;justify-content:flex-end;flex:0 0 auto;height:46px;padding:0 12px;background:#fff;border-bottom:1px solid #efecf6}' +
-      '#mg-cn .mg-pay-x{border:0;width:34px;height:34px;border-radius:50%;padding:0;font-size:15px;line-height:1;cursor:pointer;background:#1c1430;color:#fff}' +
+      // pay modal opens at FULL size immediately (fixed height, no bar) so there's no
+      // thin-bar→grow jump; the OdysPay iframe fills it edge-to-edge (no white bar seam,
+      // no box border/frame). Close button floats over the top-right corner.
+      '#mg-cn .box.mg-pay{max-width:520px;width:100%;height:86vh;max-height:820px;padding:0;overflow:hidden;position:relative;border:none;background:#fff}' +
+      '#mg-cn .box.mg-pay iframe{width:100%;height:100%;border:0;display:block;background:#fff}' +
+      '#mg-cn .mg-pay-x{position:absolute;top:10px;right:10px;z-index:3;border:0;width:34px;height:34px;border-radius:50%;padding:0;font-size:15px;line-height:1;cursor:pointer;background:rgba(20,16,40,.82);color:#fff}' +
+      // one loader covering the whole modal until OdysPay paints (removed on iframe load)
+      '#mg-cn .mg-pay-load{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;background:#fff}' +
       '#mg-cn h2{font:700 21px/1.3 "Open Sans",system-ui,sans-serif;margin:0 0 6px;color:#1c1c1c}' +
       '#mg-cn p.sub{margin:0 0 16px;color:#6b6575;font-size:13.5px}' +
       '#mg-cn input{width:100%;box-sizing:border-box;background:#fff;border:1px solid #d8d1e4;border-radius:12px;padding:14px;color:#1c1c1c;font-size:15px;margin-bottom:10px}' +
@@ -328,28 +330,31 @@
   // Build the pay card (close bar + OdysPay iframe) inside `box`. Setting the iframe
   // `src` starts the OdysPay form loading immediately, so this is used both to render
   // the live form (visible overlay) and to prewarm it (hidden overlay).
-  function buildPayBox(box, url) {
-    box.className = 'box mg-pay';                // wider card; close lives in its own bar
-    var bar = document.createElement('div'); bar.className = 'mg-pay-bar';
+  // Floating close button (no white bar → the OdysPay form fills the modal edge-to-edge).
+  function addPayClose(box) {
     var close = document.createElement('button');
     close.className = 'mg-pay-x'; close.textContent = '✕'; close.setAttribute('aria-label', 'Close');
     close.addEventListener('click', payCloseHandler);
-    bar.appendChild(close);
+    box.appendChild(close);
+  }
+  // One full-modal loader; hidden a beat AFTER the iframe `load` (bridging OdysPay's own
+  // init spinner) so the buyer never sees two spinners. Capped at 8s.
+  function addPayLoader(box) {
+    var load = document.createElement('div'); load.className = 'mg-pay-load'; load.innerHTML = '<div class="spin"></div>';
+    box.appendChild(load);
+    var hidden = false;
+    var hide = function () { if (hidden) return; hidden = true; if (load && load.parentNode) load.parentNode.removeChild(load); };
+    return { load: load, onIframe: function (f) { f.addEventListener('load', function () { setTimeout(hide, 900); }); setTimeout(hide, 8000); } };
+  }
+  function buildPayBox(box, url) {
+    box.className = 'box mg-pay';
     var f = document.createElement('iframe');
     f.setAttribute('allow', 'payment');           // REQUIRED for Apple/Google Pay
-    // ONE loader over the iframe while OdysPay paints. We don't hide it on the raw
-    // `load` event — OdysPay then shows its OWN init spinner right after, which read as
-    // a second loader. Instead hide a beat AFTER load (bridging OdysPay's init spinner),
-    // capped at 8s, so the buyer sees a single loader → then the ready form.
-    var load = document.createElement('div'); load.className = 'mg-pay-load'; load.innerHTML = '<div class="spin"></div>';
-    var hidden = false;
-    var hideLoad = function () { if (hidden) return; hidden = true; if (load && load.parentNode) load.parentNode.removeChild(load); };
-    f.addEventListener('load', function () { setTimeout(hideLoad, 900); }); // cover OdysPay's own spinner, then reveal the form
-    setTimeout(hideLoad, 8000);                   // absolute cap — never leave the spinner stuck
+    var L = addPayLoader(box);                     // loader on top; iframe fills the modal
+    L.onIframe(f);
     f.src = url;
-    box.appendChild(bar);
-    box.appendChild(f);
-    box.appendChild(load);
+    box.insertBefore(f, L.load);                   // iframe under the loader
+    addPayClose(box);
     return f;
   }
   // Open the pay modal IMMEDIATELY on click with a single loader, then drop the OdysPay
@@ -357,24 +362,19 @@
   // matches (no second spinner). Used when the form wasn't fully preloaded yet at click.
   function openPayNow(email, price, variant) {
     buyer.email = email; buyer.price = (price == null ? null : price); buyer.variant = variant || 'full';
-    var box = overlay(); box.className = 'box mg-pay';
-    var bar = document.createElement('div'); bar.className = 'mg-pay-bar';
-    var close = document.createElement('button'); close.className = 'mg-pay-x'; close.textContent = '✕'; close.setAttribute('aria-label', 'Close');
-    close.addEventListener('click', payCloseHandler); bar.appendChild(close);
-    var load = document.createElement('div'); load.className = 'mg-pay-load'; load.innerHTML = '<div class="spin"></div>';
-    box.appendChild(bar); box.appendChild(load);
-    track('payment_attempt');                    // form shown due to the button click
+    var box = overlay(); box.className = 'box mg-pay';       // full-size modal immediately (fixed height via CSS)
+    addPayClose(box);
+    var L = addPayLoader(box);                                // one full-modal loader
+    track('payment_attempt');                                // form shown due to the button click
     var urlP;
     if (prewarm.status === 'loading' && prewarm.promise && prewarm.price === (price == null ? null : price)) {
       prewarm.claimed = true; urlP = prewarm.promise;         // reuse the checkout already in flight
     } else { urlP = doStartCheckout(email, price, variant); }
     urlP.then(function (url) {
       var f = document.createElement('iframe'); f.setAttribute('allow', 'payment');
-      var hidden = false; var hide = function () { if (hidden) return; hidden = true; if (load && load.parentNode) load.parentNode.removeChild(load); };
-      f.addEventListener('load', function () { setTimeout(hide, 900); }); setTimeout(hide, 8000);
-      f.src = url; box.insertBefore(f, load);                 // loader stays on top until the form paints
+      L.onIframe(f); f.src = url; box.insertBefore(f, L.load);   // loader stays on top until the form paints
     }).catch(function () {
-      if (load && load.parentNode) load.parentNode.removeChild(load);
+      box.className = 'box';                                  // back to the normal padded card for the error
       box.innerHTML = '<h2 style="text-align:center">Magnora</h2><p class="err" style="text-align:center">' + T.err + '</p><button class="cta" id="rt">' + T.cont + '</button>';
       box.querySelector('#rt').addEventListener('click', function () { openPayNow(email, price, variant); });
     });
