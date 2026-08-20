@@ -279,15 +279,9 @@
 
   var buyer = { email: '', price: null, variant: 'full' };   // remembered so the downsell can re-checkout
 
-  // ── Step 2+3: start (generate) → checkout (account + OdysPay) ──
-  // Opens its own overlay (spinner → OdysPay iframe). `email` comes from the funnel
-  // (never re-asked). `price` is what the user selected on the paywall (or null →
-  // backend uses the funnel's admin price).
-  function startAndCheckout(email, price, variant) {
-    buyer.email = email; buyer.price = price; buyer.variant = variant || 'full';
-    var box = overlay();
-    box.innerHTML = '<div class="spin"></div><p class="sub" style="text-align:center">' + T.waiting + '</p>';
-    // If the session already exists (downsell re-checkout), reuse it.
+  // ── Step 2+3: start (generate) → checkout (account + OdysPay) → payment_url ──
+  // Pure data path (no UI). Reused by prewarm, the instant open, and the downsell.
+  function doStartCheckout(email, price, variant) {
     var startP = session.id
       ? Promise.resolve({ session_id: session.id, claim_token: session.token })
       : (function () {
@@ -298,19 +292,23 @@
           if (photo) fd.append('image', photo, 'scan.jpg');
           return post('/funnels/start', fd, true);
         })();
-
-    startP
+    return startP
       .then(function (s) {
         saveSession(s.session_id, s.claim_token);
         var body = { session_id: s.session_id, claim_token: s.claim_token, email: email, variant: variant || 'full' };
         if (price) body.price = price;                    // charge the user's selected price
         return post('/funnels/checkout', body);
       })
-      .then(function (co) { showPayment(co.payment_url); })
+      .then(function (co) { return co.payment_url; });
+  }
+  // Downsell re-checkout: its own spinner card → OdysPay iframe.
+  function startAndCheckout(email, price, variant) {
+    buyer.email = email; buyer.price = price; buyer.variant = variant || 'full';
+    var box = overlay();
+    box.innerHTML = '<div class="spin"></div><p class="sub" style="text-align:center">' + T.waiting + '</p>';
+    doStartCheckout(email, price, variant)
+      .then(function (url) { showPayment(url); })
       .catch(function () {
-        // Real payment request failed (network/backend). Stay in the payment window and let
-        // the buyer retry the REAL checkout — the button re-runs startAndCheckout, never a
-        // dead-end close and never a fake "success".
         box.innerHTML = '<h2 style="text-align:center">Magnora</h2><p class="err" id="e" style="text-align:center"></p><button class="cta" id="rt"></button>';
         box.querySelector('#e').textContent = T.err;
         var rt = box.querySelector('#rt'); rt.textContent = T.cont;
@@ -354,6 +352,33 @@
     box.appendChild(load);
     return f;
   }
+  // Open the pay modal IMMEDIATELY on click with a single loader, then drop the OdysPay
+  // iframe in once the payment_url is ready — reusing the in-flight prewarm checkout if it
+  // matches (no second spinner). Used when the form wasn't fully preloaded yet at click.
+  function openPayNow(email, price, variant) {
+    buyer.email = email; buyer.price = (price == null ? null : price); buyer.variant = variant || 'full';
+    var box = overlay(); box.className = 'box mg-pay';
+    var bar = document.createElement('div'); bar.className = 'mg-pay-bar';
+    var close = document.createElement('button'); close.className = 'mg-pay-x'; close.textContent = '✕'; close.setAttribute('aria-label', 'Close');
+    close.addEventListener('click', payCloseHandler); bar.appendChild(close);
+    var load = document.createElement('div'); load.className = 'mg-pay-load'; load.innerHTML = '<div class="spin"></div>';
+    box.appendChild(bar); box.appendChild(load);
+    track('payment_attempt');                    // form shown due to the button click
+    var urlP;
+    if (prewarm.status === 'loading' && prewarm.promise && prewarm.price === (price == null ? null : price)) {
+      prewarm.claimed = true; urlP = prewarm.promise;         // reuse the checkout already in flight
+    } else { urlP = doStartCheckout(email, price, variant); }
+    urlP.then(function (url) {
+      var f = document.createElement('iframe'); f.setAttribute('allow', 'payment');
+      var hidden = false; var hide = function () { if (hidden) return; hidden = true; if (load && load.parentNode) load.parentNode.removeChild(load); };
+      f.addEventListener('load', function () { setTimeout(hide, 900); }); setTimeout(hide, 8000);
+      f.src = url; box.insertBefore(f, load);                 // loader stays on top until the form paints
+    }).catch(function () {
+      if (load && load.parentNode) load.parentNode.removeChild(load);
+      box.innerHTML = '<h2 style="text-align:center">Magnora</h2><p class="err" style="text-align:center">' + T.err + '</p><button class="cta" id="rt">' + T.cont + '</button>';
+      box.querySelector('#rt').addEventListener('click', function () { openPayNow(email, price, variant); });
+    });
+  }
   function showPayment(url) {
     track('payment_attempt');                   // Yandex-only goal (NOT Meta) — buyer reached the OdysPay form
     buildPayBox(overlay(), url);
@@ -366,36 +391,23 @@
   // even on a cold cache. Trade-off (chosen deliberately): OdysPay's own form-load beacon
   // fires at prewarm, not on the click. Our own payment_attempt goal still fires on the
   // click reveal (revealPrewarm), so funnel analytics stay click-accurate.
-  var prewarm = { status: 'idle', price: null, variant: 'full', url: null, overlay: null };
+  var prewarm = { status: 'idle', price: null, variant: 'full', url: null, overlay: null, promise: null, claimed: false };
   function prewarmCheckout(email, price, variant) {
     if (SUCCESSPAY) return;                                   // QA bypass — no real form to warm
     if (!email || !EMRE.test(email)) return;                 // checkout needs a valid email
     if (prewarm.status === 'loading' || prewarm.status === 'ready') return;   // once only
-    prewarm.status = 'loading'; prewarm.price = (price == null ? null : price); prewarm.variant = variant || 'full';
-    var startP = session.id
-      ? Promise.resolve({ session_id: session.id, claim_token: session.token })
-      : (function () {
-          var fd = new FormData();
-          fd.append('funnel', CFG.funnel);
-          fd.append('answers', JSON.stringify(answers()));
-          var photo = (CFG.needsPhoto && typeof M.getPhoto === 'function') ? M.getPhoto() : null;
-          if (photo) fd.append('image', photo, 'scan.jpg');
-          return post('/funnels/start', fd, true);
-        })();
-    startP
-      .then(function (s) {
-        saveSession(s.session_id, s.claim_token);
-        var body = { session_id: s.session_id, claim_token: s.claim_token, email: email, variant: variant || 'full' };
-        if (price) body.price = price;
-        return post('/funnels/checkout', body);
-      })
-      .then(function (co) {
-        if (document.getElementById('mg-cn')) { prewarm.status = 'idle'; return; }   // a real overlay opened meanwhile → abort quietly
+    prewarm.status = 'loading'; prewarm.price = (price == null ? null : price); prewarm.variant = variant || 'full'; prewarm.claimed = false;
+    prewarm.promise = doStartCheckout(email, price, variant);
+    prewarm.promise
+      .then(function (url) {
+        prewarm.url = url;
+        if (prewarm.claimed) { prewarm.status = 'consumed'; return; }                 // a fast click already grabbed the checkout → it fills its own modal
+        if (document.getElementById('mg-cn')) { prewarm.status = 'idle'; return; }    // a real overlay opened meanwhile → abort quietly
         css();
         var ov = document.createElement('div'); ov.id = 'mg-cn'; ov.className = 'mg-prewarm-hidden'; if (RTL) ov.dir = 'rtl';
         var box = document.createElement('div'); ov.appendChild(box); document.body.appendChild(ov);
-        buildPayBox(box, co.payment_url);           // iframe loads NOW, in the background (hidden)
-        prewarm.url = co.payment_url; prewarm.overlay = ov; prewarm.status = 'ready';
+        buildPayBox(box, url);                      // iframe loads NOW, in the background (hidden)
+        prewarm.overlay = ov; prewarm.status = 'ready';
       })
       .catch(function () { prewarm.status = 'failed'; prewarm.url = null; prewarm.overlay = null; });
   }
@@ -559,12 +571,12 @@
           postPaid(); return;
         }
         // If the form was preloaded (hidden) for this same price, reveal it INSTANTLY.
-        // payment_attempt fires inside revealPrewarm (on this click). Otherwise run the
-        // normal checkout (also covers a price change since prewarm time).
+        // Otherwise open the pay modal IMMEDIATELY with a single loader and fill the form
+        // when the checkout resolves (reusing the in-flight prewarm) — no double spinner.
         if (prewarm.status === 'ready' && prewarm.overlay && prewarm.price === (_price == null ? null : _price)) {
           revealPrewarm(getEmail(), _price); return;
         }
-        startAndCheckout(getEmail(), _price);
+        openPayNow(getEmail(), _price);
       } catch (x) {}
     }, true);
   }
