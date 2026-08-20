@@ -158,12 +158,11 @@
       // prewarm: overlay is in the DOM (iframe fully loads) but hidden & inert; un-hidden instantly on click
       '#mg-cn.mg-prewarm-hidden{visibility:hidden;opacity:0;pointer-events:none}' +
       '#mg-cn .box{background:#fff;border:1px solid #ece8f3;border-radius:20px;max-width:440px;width:100%;max-height:92vh;overflow:auto;color:#1c1c1c;padding:24px;box-shadow:0 24px 80px rgba(20,16,40,.28)}' +
-      // Pay modal — same as the other Magnora funnels (reference): a wide card with a white
-      // top bar holding the close button, and the OdysPay iframe below (80vh). On phones the
-      // modal is viewport-limited (~viewport-32) so OdysPay's card fills it; on desktop it may
-      // show OdysPay's own dark page-bg on the sides (its card max-width), matching every
-      // other Magnora funnel. Rounded corners inherited from .box.
-      '#mg-cn .box.mg-pay{max-width:404px;padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative;background:#fff}' +
+      // Pay modal: white top bar + close, OdysPay iframe below (80vh), rounded box.
+      // Width 316px is BELOW OdysPay's desktop-layout breakpoint (~320px), so their form
+      // uses its full-width MOBILE layout and fills the modal — no dark page-bg side bands,
+      // on desktop too — while staying wide enough that email/name don't truncate.
+      '#mg-cn .box.mg-pay{max-width:316px;padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative;background:#fff}' +
       '#mg-cn .box.mg-pay iframe{height:80vh;max-height:760px;border-radius:0;border:0;display:block;background:#fff}' +
       '#mg-cn .mg-pay-bar{display:flex;align-items:center;justify-content:flex-end;flex:0 0 auto;height:46px;padding:0 12px;background:#fff;border-bottom:1px solid #efecf6}' +
       '#mg-cn .mg-pay-x{border:0;width:34px;height:34px;border-radius:50%;padding:0;font-size:15px;line-height:1;cursor:pointer;background:#1c1430;color:#fff}' +
