@@ -156,8 +156,10 @@
     s.textContent =
       '#mg-cn{position:fixed;inset:0;z-index:2147483600;background:rgba(20,16,40,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:"Open Sans",system-ui,-apple-system,sans-serif}' +
       '#mg-cn .box{background:#fff;border:1px solid #ece8f3;border-radius:20px;max-width:440px;width:100%;max-height:92vh;overflow:auto;color:#1c1c1c;padding:24px;box-shadow:0 24px 80px rgba(20,16,40,.28)}' +
-      '#mg-cn .box.mg-pay{max-width:520px;padding:0;overflow:hidden;display:flex;flex-direction:column}' +
+      '#mg-cn .box.mg-pay{max-width:520px;padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative}' +
       '#mg-cn .box.mg-pay iframe{height:80vh;max-height:760px;border-radius:0}' +
+      // loader shown over the iframe until OdysPay paints (removed on iframe load) — perceived instant open
+      '#mg-cn .mg-pay-load{position:absolute;left:0;right:0;top:46px;bottom:0;display:flex;align-items:center;justify-content:center;background:#fff}' +
       '#mg-cn .mg-pay-bar{display:flex;align-items:center;justify-content:flex-end;flex:0 0 auto;height:46px;padding:0 12px;background:#fff;border-bottom:1px solid #efecf6}' +
       '#mg-cn .mg-pay-x{border:0;width:34px;height:34px;border-radius:50%;padding:0;font-size:15px;line-height:1;cursor:pointer;background:#1c1430;color:#fff}' +
       '#mg-cn h2{font:700 21px/1.3 "Open Sans",system-ui,sans-serif;margin:0 0 6px;color:#1c1c1c}' +
@@ -335,9 +337,15 @@
     bar.appendChild(close);
     var f = document.createElement('iframe');
     f.setAttribute('allow', 'payment');           // REQUIRED for Apple/Google Pay
+    // loader over the iframe while OdysPay paints, so the window feels instant on open
+    var load = document.createElement('div'); load.className = 'mg-pay-load'; load.innerHTML = '<div class="spin"></div>';
+    var hideLoad = function () { if (load && load.parentNode) load.parentNode.removeChild(load); };
+    f.addEventListener('load', hideLoad);
+    setTimeout(hideLoad, 8000);                   // safety: never leave the spinner stuck
     f.src = url;
     box.appendChild(bar);
     box.appendChild(f);
+    box.appendChild(load);
     return f;
   }
   function showPayment(url) {
@@ -374,7 +382,22 @@
         if (price) body.price = price;
         return post('/funnels/checkout', body);
       })
-      .then(function (co) { prewarm.url = co.payment_url; prewarm.status = 'ready'; })   // URL ready; the OdysPay form is loaded later, on the reveal
+      .then(function (co) {
+        prewarm.url = co.payment_url; prewarm.status = 'ready';
+        // Warm the connection to OdysPay's origin now (DNS + TCP + TLS) WITHOUT loading
+        // the form, so setting the iframe src on the click opens the payment page almost
+        // instantly. preconnect fetches no content, so OdysPay's form-load beacon still
+        // only fires on the click reveal.
+        try {
+          var o = new URL(co.payment_url).origin;
+          ['preconnect', 'dns-prefetch'].forEach(function (rel) {
+            if (document.querySelector('link[data-mgpre="' + rel + '"]')) return;
+            var l = document.createElement('link'); l.rel = rel; l.href = o; l.setAttribute('data-mgpre', rel);
+            if (rel === 'preconnect') l.crossOrigin = 'anonymous';
+            document.head.appendChild(l);
+          });
+        } catch (e) {}
+      })   // URL ready; the OdysPay form is loaded later, on the reveal
       .catch(function () { prewarm.status = 'failed'; prewarm.url = null; });
   }
 
