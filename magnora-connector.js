@@ -337,11 +337,15 @@
     bar.appendChild(close);
     var f = document.createElement('iframe');
     f.setAttribute('allow', 'payment');           // REQUIRED for Apple/Google Pay
-    // loader over the iframe while OdysPay paints, so the window feels instant on open
+    // ONE loader over the iframe while OdysPay paints. We don't hide it on the raw
+    // `load` event — OdysPay then shows its OWN init spinner right after, which read as
+    // a second loader. Instead hide a beat AFTER load (bridging OdysPay's init spinner),
+    // capped at 8s, so the buyer sees a single loader → then the ready form.
     var load = document.createElement('div'); load.className = 'mg-pay-load'; load.innerHTML = '<div class="spin"></div>';
-    var hideLoad = function () { if (load && load.parentNode) load.parentNode.removeChild(load); };
-    f.addEventListener('load', hideLoad);
-    setTimeout(hideLoad, 8000);                   // safety: never leave the spinner stuck
+    var hidden = false;
+    var hideLoad = function () { if (hidden) return; hidden = true; if (load && load.parentNode) load.parentNode.removeChild(load); };
+    f.addEventListener('load', function () { setTimeout(hideLoad, 900); }); // cover OdysPay's own spinner, then reveal the form
+    setTimeout(hideLoad, 8000);                   // absolute cap — never leave the spinner stuck
     f.src = url;
     box.appendChild(bar);
     box.appendChild(f);
