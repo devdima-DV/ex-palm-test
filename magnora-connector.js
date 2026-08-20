@@ -155,6 +155,8 @@
     // payment window feels native to the funnel, not a foreign dark popup.
     s.textContent =
       '#mg-cn{position:fixed;inset:0;z-index:2147483600;background:rgba(20,16,40,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:"Open Sans",system-ui,-apple-system,sans-serif}' +
+      // prewarm: overlay is in the DOM (so the OdysPay iframe loads) but hidden & inert; un-hidden instantly on click
+      '#mg-cn.mg-prewarm-hidden{visibility:hidden;opacity:0;pointer-events:none}' +
       '#mg-cn .box{background:#fff;border:1px solid #ece8f3;border-radius:20px;max-width:440px;width:100%;max-height:92vh;overflow:auto;color:#1c1c1c;padding:24px;box-shadow:0 24px 80px rgba(20,16,40,.28)}' +
       '#mg-cn .box.mg-pay{max-width:520px;padding:0;overflow:hidden;display:flex;flex-direction:column}' +
       '#mg-cn .box.mg-pay iframe{height:80vh;max-height:760px;border-radius:0}' +
@@ -316,26 +318,80 @@
 
   // ── Step 4: embed the OdysPay payment form (with exit-intent downsell) ──
   var downsellShown = false;
-  function showPayment(url) {
-    track('payment_attempt');                   // Yandex-only goal (NOT Meta) — buyer reached the OdysPay form
-    var box = overlay();
+  function payCloseHandler() {
+    // No exit-intent downsell on a small trial (≤ $5) — re-offering a higher
+    // "discount" price there makes no sense.
+    var isTrial = (buyer.price != null && buyer.price <= 5);
+    if (!downsellShown && !isTrial) { downsellShown = true; showDownsell(); }   // exit-intent → discount
+    else { track('payment_closed'); closeOverlay(); }                            // abandoned
+  }
+  // Build the pay card (close bar + OdysPay iframe) inside `box`. Setting the iframe
+  // `src` starts the OdysPay form loading immediately, so this is used both to render
+  // the live form (visible overlay) and to prewarm it (hidden overlay).
+  function buildPayBox(box, url) {
     box.className = 'box mg-pay';                // wider card; close lives in its own bar
     var bar = document.createElement('div'); bar.className = 'mg-pay-bar';
     var close = document.createElement('button');
     close.className = 'mg-pay-x'; close.textContent = '✕'; close.setAttribute('aria-label', 'Close');
-    close.addEventListener('click', function () {
-      // No exit-intent downsell on a small trial (≤ $5) — re-offering a higher
-      // "discount" price there makes no sense.
-      var isTrial = (buyer.price != null && buyer.price <= 5);
-      if (!downsellShown && !isTrial) { downsellShown = true; showDownsell(); }   // exit-intent → discount
-      else { track('payment_closed'); closeOverlay(); }                            // abandoned
-    });
+    close.addEventListener('click', payCloseHandler);
     bar.appendChild(close);
     var f = document.createElement('iframe');
     f.setAttribute('allow', 'payment');           // REQUIRED for Apple/Google Pay
     f.src = url;
     box.appendChild(bar);
     box.appendChild(f);
+    return f;
+  }
+  function showPayment(url) {
+    track('payment_attempt');                   // Yandex-only goal (NOT Meta) — buyer reached the OdysPay form
+    buildPayBox(overlay(), url);
+  }
+
+  // ── Prewarm the OdysPay form BEFORE the click ──
+  // Runs start+checkout ahead of time and builds the payment overlay HIDDEN, so the
+  // iframe loads in the background. On click we only un-hide it (the iframe is never
+  // reparented — that would reload it). payment_attempt is NOT fired here; it fires on
+  // the reveal, so the Yandex goal still marks the click-driven display of the form.
+  var prewarm = { status: 'idle', price: null, variant: 'full', url: null, overlay: null };
+  function prewarmCheckout(email, price, variant) {
+    if (SUCCESSPAY) return;                                   // QA bypass — no real form to warm
+    if (!email || !EMRE.test(email)) return;                 // checkout needs a valid email
+    if (prewarm.status === 'loading' || prewarm.status === 'ready') return;   // once only
+    prewarm.status = 'loading'; prewarm.price = (price == null ? null : price); prewarm.variant = variant || 'full';
+    var startP = session.id
+      ? Promise.resolve({ session_id: session.id, claim_token: session.token })
+      : (function () {
+          var fd = new FormData();
+          fd.append('funnel', CFG.funnel);
+          fd.append('answers', JSON.stringify(answers()));
+          var photo = (CFG.needsPhoto && typeof M.getPhoto === 'function') ? M.getPhoto() : null;
+          if (photo) fd.append('image', photo, 'scan.jpg');
+          return post('/funnels/start', fd, true);
+        })();
+    startP
+      .then(function (s) {
+        saveSession(s.session_id, s.claim_token);
+        var body = { session_id: s.session_id, claim_token: s.claim_token, email: email, variant: variant || 'full' };
+        if (price) body.price = price;
+        return post('/funnels/checkout', body);
+      })
+      .then(function (co) {
+        if (document.getElementById('mg-cn')) { prewarm.status = 'idle'; return; }  // a real overlay opened meanwhile → abort quietly
+        css();
+        var ov = document.createElement('div'); ov.id = 'mg-cn'; ov.className = 'mg-prewarm-hidden'; if (RTL) ov.dir = 'rtl';
+        var box = document.createElement('div'); ov.appendChild(box); document.body.appendChild(ov);
+        buildPayBox(box, co.payment_url);
+        prewarm.url = co.payment_url; prewarm.overlay = ov; prewarm.status = 'ready';
+      })
+      .catch(function () { prewarm.status = 'failed'; prewarm.overlay = null; });
+  }
+  // Reveal the prewarmed form on the pay-button click: un-hide the already-loaded overlay
+  // and fire payment_attempt HERE, on the click-driven display of the form.
+  function revealPrewarm(email, price) {
+    buyer.email = email; buyer.price = (price == null ? null : price); buyer.variant = 'full';
+    var ov = prewarm.overlay; prewarm.overlay = null; prewarm.status = 'consumed';
+    if (ov) ov.className = '';                    // drop mg-prewarm-hidden → instantly visible
+    track('payment_attempt');                     // goal: form shown due to the button click
   }
 
   // ── Exit-intent downsell — re-checkout at the discounted price ──
@@ -469,7 +525,8 @@
     var re = M.payCtaRe || /(get my|unlock|reveal|see (my|your)|get (your )?(results|report|reading|prediction|plan)|start (your )?(plan|trial)|subscribe|continue to pay|complete (my )?order|\bpay\b|checkout|get started)/i;
     document.addEventListener('click', function (e) {
       try {
-        if (document.getElementById('mg-cn')) return;        // OdysPay already open
+        var _ov = document.getElementById('mg-cn');
+        if (_ov && _ov.className.indexOf('mg-prewarm-hidden') < 0) return;   // a VISIBLE overlay is already open (hidden prewarm one is fine)
         var t = e.target.closest && e.target.closest('button,a,[role="button"],[data-testid]');
         if (!t) return;
         var txt = (t.textContent || '').trim().toLowerCase();
@@ -487,6 +544,12 @@
           buyer.email = getEmail(); buyer.price = _price; buyer.variant = 'full';
           postPaid(); return;
         }
+        // If the OdysPay form was prewarmed for this same price, show it INSTANTLY
+        // (payment_attempt fires inside revealPrewarm, on this click). Otherwise run
+        // the normal checkout (also covers a price change since prewarm time).
+        if (prewarm.status === 'ready' && prewarm.overlay && prewarm.price === (_price == null ? null : _price)) {
+          revealPrewarm(getEmail(), _price); return;
+        }
         startAndCheckout(getEmail(), _price);
       } catch (x) {}
     }, true);
@@ -494,9 +557,17 @@
 
   // Fire Lead when a recognisable paywall screen is shown (best-effort analytics).
   function tick() {
-    if (_leadFired) return;
     var on = false; try { on = CFG.isPayScreen(); } catch (e) {}
-    if (on) { _leadFired = true; track('lead', { screen_id: 'paywall' }); }
+    if (!on) return;
+    if (!_leadFired) { _leadFired = true; track('lead', { screen_id: 'paywall' }); }
+    // Prewarm the OdysPay form the moment the paywall is shown (email was collected
+    // earlier in the funnel). Runs once; the pay-button click then shows it instantly.
+    if (prewarm.status === 'idle') {
+      try {
+        var em = getEmail();
+        if (em) prewarmCheckout(em, (typeof M.getPrice === 'function' ? M.getPrice() : null), 'full');
+      } catch (e) {}
+    }
   }
   function loadPricing() {
     fetch(CFG.api + '/funnels/pricing?funnel=' + encodeURIComponent(CFG.funnel))
