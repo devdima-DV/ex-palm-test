@@ -409,45 +409,37 @@
     });
     return _stripeJsP;
   }
-  // Stripe Appearance API tuned to the Magnora cosmic palette (dark field, gold focus glow).
+  // Stripe Appearance API — LIGHT/clean checkout (reference: soulmate.magnora.space): white
+  // fields, Magnora purple accent, card brand icons shown by the Payment Element itself.
   var MG_APPEARANCE = {
-    theme: 'night',
+    theme: 'stripe',
     variables: {
-      colorPrimary: '#E8C37E', colorText: '#F4EFE7', colorTextSecondary: '#a79fbe',
-      colorTextPlaceholder: '#6f6788', colorDanger: '#ff8a8a', colorBackground: '#17112b',
+      colorPrimary: '#5b3fe0', colorText: '#1c1c1c', colorTextSecondary: '#6b6575',
+      colorTextPlaceholder: '#9a93a8', colorDanger: '#e5484d', colorBackground: '#ffffff',
       fontFamily: '"Open Sans", system-ui, sans-serif', borderRadius: '12px', spacingUnit: '4px',
     },
     rules: {
-      '.Input': { backgroundColor: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: 'none', color: '#F4EFE7' },
-      '.Input:focus': { border: '1px solid rgba(246,217,140,0.55)', boxShadow: '0 0 0 3px rgba(246,217,140,0.12)' },
-      '.Input::placeholder': { color: '#6f6788' },
-      '.Label': { color: '#a79fbe', fontWeight: '600' },
-      '.Tab, .Block': { backgroundColor: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.12)' },
-      '.Tab:hover': { color: '#F4EFE7' },
-      '.Tab--selected': { borderColor: 'rgba(246,217,140,0.55)', color: '#F4EFE7' },
+      '.Input': { border: '1px solid #dcd7e6', boxShadow: 'none' },
+      '.Input:focus': { border: '1px solid #7b61ff', boxShadow: '0 0 0 3px rgba(123,97,255,0.15)' },
+      '.Label': { color: '#6b6575', fontWeight: '600' },
+      '.Tab--selected, .Block': { borderColor: '#7b61ff' },
     },
   };
   function ensureElCss() {
     if (document.getElementById('mg-el-css')) return;
-    ensureSerif();                                   // Cormorant Garamond for the amount
     var s = document.createElement('style'); s.id = 'mg-el-css';
     s.textContent =
-      '#mg-cn .box.mg-el{position:relative;max-width:432px;width:100%;max-height:94vh;overflow:auto;padding:24px 22px 18px;border-radius:24px;color:#F4EFE7;font-family:"Open Sans",system-ui,sans-serif;background:radial-gradient(120% 80% at 50% -8%,rgba(139,109,255,.16),transparent 55%),linear-gradient(180deg,rgba(31,23,58,.98),rgba(17,11,33,.99));border:1px solid rgba(233,197,132,.16);box-shadow:0 40px 120px rgba(8,5,20,.7)}' +
-      '#mg-cn .box.mg-el::after{content:"";position:absolute;left:10%;right:10%;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(233,197,132,.28),transparent)}' +
-      '#mg-cn .mg-el-x{position:absolute;top:14px;right:14px;border:0;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.08);color:#F4EFE7;font-size:14px;line-height:1;cursor:pointer;z-index:4}' +
-      '#mg-cn .mg-el-secure{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7d7597;border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:5px 11px}' +
-      '#mg-cn .mg-el-brand{margin:16px 0 2px;font:600 13px "Open Sans";letter-spacing:.4em;text-transform:uppercase;color:#F4EFE7}' +
-      '#mg-cn .mg-el-brand span{color:#F6D98C;margin-right:6px}' +
-      '#mg-cn .mg-el-amount{font-family:"Cormorant Garamond",serif;font-weight:700;line-height:1;font-size:52px;margin:8px 0 4px;background:linear-gradient(180deg,#fff,#F6D98C 55%,#D9A94E);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}' +
-      '#mg-cn .mg-el-sub{color:#a79fbe;font-size:13px;margin:0 0 18px}' +
-      '#mg-cn .mg-el-express{margin-bottom:14px}#mg-cn .mg-el-express:empty{display:none;margin:0}' +
+      '#mg-cn .box.mg-el{position:relative;max-width:440px;width:100%;max-height:94vh;overflow:auto;padding:22px 20px 18px;border-radius:20px;color:#1c1c1c;font-family:"Open Sans",system-ui,sans-serif;background:#fff;box-shadow:0 30px 90px rgba(20,16,40,.35)}' +
+      '#mg-cn .mg-el-x{position:absolute;top:14px;right:14px;border:0;width:34px;height:34px;border-radius:50%;background:#1c1430;color:#fff;font-size:14px;line-height:1;cursor:pointer;z-index:4}' +
+      '#mg-cn .mg-el-title{text-align:center;font:800 22px/1.25 "Open Sans";color:#1c1c1c;margin:2px 24px 16px}' +
+      '#mg-cn .mg-el-express{margin-bottom:12px;min-height:1px}#mg-cn .mg-el-express:empty{display:none;margin:0}' +
+      '#mg-cn .mg-el-charge{text-align:center;color:#6b6575;font-size:13.5px;margin:0 0 16px}#mg-cn .mg-el-charge b{color:#1c1c1c;font-weight:700}' +
       '#mg-cn .mg-el-pe{margin-bottom:2px}' +
-      '#mg-cn .mg-el-err{color:#ff8a8a;font-size:12.5px;min-height:16px;margin:8px 2px 0}' +
-      '#mg-cn .mg-el-pay{margin-top:14px;width:100%;height:54px;border:0;border-radius:15px;cursor:pointer;font:700 16px "Open Sans";color:#2a1b05;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(180deg,#F6D98C,#D9A94E);box-shadow:0 12px 34px rgba(217,169,78,.42),0 0 0 1px rgba(255,255,255,.25) inset}' +
+      '#mg-cn .mg-el-err{color:#e5484d;font-size:12.5px;min-height:16px;margin:8px 2px 0}' +
+      '#mg-cn .mg-el-pay{margin-top:14px;width:100%;height:54px;border:0;border-radius:14px;cursor:pointer;font:700 16px "Open Sans";color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#7b61ff,#5b3fe0);box-shadow:0 12px 30px rgba(91,63,224,.42)}' +
       '#mg-cn .mg-el-pay:disabled{cursor:default;opacity:.7}' +
-      '#mg-cn .mg-el-trust{display:flex;align-items:center;justify-content:center;gap:7px;margin:14px 0 2px;color:#7d7597;font-size:12px}' +
-      '#mg-cn .mg-el-stripe{text-align:center;color:#7d7597;font-size:11.5px;margin:9px 0 2px}#mg-cn .mg-el-stripe b{color:#b9b1cc}' +
-      '#mg-cn .mg-el-load{position:absolute;inset:0;background:rgba(17,11,33,.86);display:flex;align-items:center;justify-content:center;border-radius:24px;z-index:3}';
+      '#mg-cn .mg-el-stripe{text-align:center;color:#9a93a8;font-size:11.5px;margin:12px 0 2px}#mg-cn .mg-el-stripe b{color:#6b6575}' +
+      '#mg-cn .mg-el-load{position:absolute;inset:0;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;border-radius:20px;z-index:3}';
     document.head.appendChild(s);
   }
   function elAmount(v) { var n = (v == null ? null : Number(v)); return (n != null && isFinite(n)) ? ('$' + n.toFixed(2)) : ''; }
@@ -458,15 +450,12 @@
     var amtStr = elAmount(checkout && checkout.price != null ? checkout.price : buyer.price);
     box.innerHTML =
       '<button class="mg-el-x" aria-label="Close">✕</button>' +
-      '<span class="mg-el-secure">🔒 ' + (T.elSecure || 'Secure checkout') + '</span>' +
-      '<div class="mg-el-brand"><span>✦</span>MAGNORA</div>' +
-      '<div class="mg-el-amount">' + (amtStr || '&nbsp;') + '</div>' +
-      '<p class="mg-el-sub">' + (T.elSub || 'Full access — cancel anytime.') + '</p>' +
+      '<h2 class="mg-el-title">Choose payment method</h2>' +
       '<div id="mg-express" class="mg-el-express"></div>' +
+      (amtStr ? '<p class="mg-el-charge">You will be charged <b>' + amtStr + '</b></p>' : '') +
       '<div id="mg-pe" class="mg-el-pe"></div>' +
       '<div class="mg-el-err" id="mg-el-err"></div>' +
-      '<button class="mg-el-pay" id="mg-el-pay">' + (amtStr ? ('Pay ' + amtStr) : (T.pay || 'Pay')) + '</button>' +
-      '<div class="mg-el-trust">✓ ' + (T.elTrust || 'Guaranteed secure & encrypted payment') + '</div>' +
+      '<button class="mg-el-pay" id="mg-el-pay">' + (amtStr ? ('Pay ' + amtStr) : 'Pay') + '</button>' +
       '<div class="mg-el-stripe">Powered by <b>Stripe</b></div>' +
       '<div class="mg-el-load" id="mg-el-load"><div class="spin"></div></div>';
     var closeBtn = box.querySelector('.mg-el-x'); if (closeBtn) closeBtn.addEventListener('click', payCloseHandler);
@@ -484,7 +473,7 @@
     }
     ensureStripeJs().then(function (Stripe) {
       var stripe = Stripe(checkout.pub_key);
-      var sdk = stripe.initCheckoutElementsSdk({ clientSecret: checkout.client_secret, elementsOptions: { appearance: MG_APPEARANCE } });
+      var sdk = stripe.initCheckoutElementsSdk({ clientSecret: checkout.client_secret, elementsOptions: { appearance: MG_APPEARANCE, locale: 'en' } });
       return sdk.loadActions().then(function (loaded) {
         if (!loaded || loaded.type !== 'success') throw new Error((loaded && loaded.error && loaded.error.message) || 'load failed');
         var actions = loaded.actions;
