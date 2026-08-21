@@ -155,8 +155,12 @@
     // payment window feels native to the funnel, not a foreign dark popup.
     s.textContent =
       '#mg-cn{position:fixed;inset:0;z-index:2147483600;background:rgba(20,16,40,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:"Open Sans",system-ui,-apple-system,sans-serif}' +
-      // prewarm: overlay is in the DOM (iframe fully loads) but hidden & inert; un-hidden instantly on click
-      '#mg-cn.mg-prewarm-hidden{visibility:hidden;opacity:0;pointer-events:none}' +
+      // Prewarm: keep the overlay ON-SCREEN and fully RENDERED (so Stripe paints ALL its inputs
+      // now) but transparent + inert via opacity:0. Key: opacity:0 STILL PAINTS, whereas
+      // visibility:hidden makes Stripe DEFER painting → on reveal the inputs would draw in one
+      // by one. With opacity:0 the whole form is already painted, so revealing (opacity 0→1) shows
+      // the complete form instantly. background/blur also fade in with opacity, so no flash.
+      '#mg-cn.mg-prewarm-hidden{opacity:0;pointer-events:none}' +
       '#mg-cn .box{background:#fff;border:1px solid #ece8f3;border-radius:20px;max-width:440px;width:100%;max-height:92vh;overflow:auto;color:#1c1c1c;padding:24px;box-shadow:0 24px 80px rgba(20,16,40,.28)}' +
       // Pay modal: white top bar + close, OdysPay iframe below (80vh), rounded box.
       // Width 520px = the reference Magnora layout (soulmate-sketch etc.): OdysPay renders its
