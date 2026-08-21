@@ -422,10 +422,27 @@
   // /funnels/start is the slow call (~20-40s: the backend generates the whole reading) and
   // needs NO price and NO OdysPay checkout — so it's safe to run early (as soon as the quiz
   // data + palm photo are ready), long before the paywall. It just caches session.id, which
-  // the on-paywall prewarmCheckout then reuses → its checkout is fast and the form preloads
-  // in time. Crucially this creates NO OdysPay transaction, so there's no early/stale-price
-  // double checkout. (The checkout — the only price-dependent, trx-creating step — still runs
-  // once, on the paywall, with the final mg_charge_price.)
+  // the click-time checkout (openPayNow → doStartCheckout) then reuses → that checkout is fast.
+  // Crucially this creates NO OdysPay transaction — the checkout (the only trx-creating step)
+  // runs ONCE, on the pay-button click, so there is exactly one pending per buyer, at form show.
+  // Warm the TLS handshakes to the payment hosts while the buyer is still in the quiz — so
+  // the OdysPay iframe (created on the pay click) paints fast WITHOUT any early request that
+  // would create a pending. Origins are fixed (odyssey-pay.com / Stripe), so no payment_url
+  // is needed. Idempotent (guarded by data-mg-pc).
+  var _pcDone = false;
+  function preconnect() {
+    if (_pcDone) return; _pcDone = true;
+    try {
+      ['https://odyssey-pay.com', 'https://js.stripe.com', 'https://api.stripe.com'].forEach(function (href) {
+        ['preconnect', 'dns-prefetch'].forEach(function (rel) {
+          var l = document.createElement('link');
+          l.rel = rel; l.href = href; l.crossOrigin = 'anonymous';
+          l.setAttribute('data-mg-pc', href);
+          document.head.appendChild(l);
+        });
+      });
+    } catch (e) {}
+  }
   var startWarm = { running: false, done: false };
   function prewarmStart() {
     if (startWarm.running || startWarm.done || session.id) return;
@@ -647,28 +664,21 @@
 
   // Fire Lead when a recognisable paywall screen is shown (best-effort analytics).
   function tick() {
-    // (A) EARLY, price-independent: prewarm the slow reading generation as soon as the quiz
-    // data + palm photo are ready (well before the paywall). No price, no OdysPay checkout,
-    // no transaction — just caches session.id so the on-paywall checkout is fast. This is the
-    // real reason soulmate's form is instant: the heavy /funnels/start is already done.
+    // Warm the payment hosts' TLS early (no request, no pending) so the click-time form paints fast.
+    preconnect();
+    // Prewarm ONLY the slow reading generation (price-independent, creates NO OdysPay pending),
+    // as soon as the quiz data + palm photo are ready. Caches session.id so the click-time
+    // checkout is fast.
     prewarmStart();
 
     var on = false; try { on = CFG.isPayScreen(); } catch (e) {}
     if (!on) return;
     if (!_leadFired) { _leadFired = true; track('lead', { screen_id: 'paywall' }); }
-    // (B) On the paywall, prewarm the checkout + build the hidden form — but ONLY once the
-    // DEFINITIVE charge price (mg_charge_price, the exact value the pay click charges) is set.
-    // Gating on it guarantees prewarm.price === the click's _price → the click REVEALS the
-    // preloaded form (instant) and never creates a second checkout at a different price.
-    // (session.id from prewarmStart makes this checkout fast → the form preloads in time.)
-    if (prewarm.status === 'idle') {
-      try {
-        var em = getEmail();
-        var chg = null; try { chg = SS.getItem('mg_charge_price'); } catch (e) {}
-        var pr = (typeof M.getPrice === 'function' ? M.getPrice() : null);
-        if (em && chg && pr != null) prewarmCheckout(em, pr, 'full');
-      } catch (e) {}
-    }
+    // NOTE: the checkout is deliberately NOT prewarmed. /funnels/checkout is what creates the
+    // OdysPay pending transaction, and we want EXACTLY ONE pending per buyer, created at the
+    // moment the payment form is shown — i.e. on the pay-button click (openPayNow → checkout).
+    // Prewarming it here would spawn a pending on every paywall view. The click-time checkout
+    // is fast because session.id (start) is already warmed and the TLS is preconnected.
   }
   function loadPricing() {
     fetch(CFG.api + '/funnels/pricing?funnel=' + encodeURIComponent(CFG.funnel))
