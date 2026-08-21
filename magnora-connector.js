@@ -418,6 +418,28 @@
   // fires at prewarm, not on the click. Our own payment_attempt goal still fires on the
   // click reveal (revealPrewarm), so funnel analytics stay click-accurate.
   var prewarm = { status: 'idle', price: null, variant: 'full', url: null, overlay: null, promise: null, claimed: false };
+  // ── Prewarm ONLY the reading generation (price-independent) ──
+  // /funnels/start is the slow call (~20-40s: the backend generates the whole reading) and
+  // needs NO price and NO OdysPay checkout — so it's safe to run early (as soon as the quiz
+  // data + palm photo are ready), long before the paywall. It just caches session.id, which
+  // the on-paywall prewarmCheckout then reuses → its checkout is fast and the form preloads
+  // in time. Crucially this creates NO OdysPay transaction, so there's no early/stale-price
+  // double checkout. (The checkout — the only price-dependent, trx-creating step — still runs
+  // once, on the paywall, with the final mg_charge_price.)
+  var startWarm = { running: false, done: false };
+  function prewarmStart() {
+    if (startWarm.running || startWarm.done || session.id) return;
+    if (CFG.needsPhoto && !(typeof M.getPhoto === 'function' && M.getPhoto())) return;  // wait for the scan
+    startWarm.running = true;
+    var fd = new FormData();
+    fd.append('funnel', CFG.funnel);
+    fd.append('answers', JSON.stringify(answers()));
+    var photo = (CFG.needsPhoto && typeof M.getPhoto === 'function') ? M.getPhoto() : null;
+    if (photo) fd.append('image', photo, 'scan.jpg');
+    post('/funnels/start', fd, true)
+      .then(function (s) { saveSession(s.session_id, s.claim_token); startWarm.done = true; })
+      .catch(function () { startWarm.running = false; });   // the paywall path retries via doStartCheckout
+  }
   function prewarmCheckout(email, price, variant) {
     if (SUCCESSPAY) return;                                   // QA bypass — no real form to warm
     if (!email || !EMRE.test(email)) return;                 // checkout needs a valid email
@@ -625,28 +647,26 @@
 
   // Fire Lead when a recognisable paywall screen is shown (best-effort analytics).
   function tick() {
-    // Prewarm as EARLY as possible — the moment email AND price are known, even several
-    // screens before the paywall. Mirrors soulmate-sketch's MAGNORA.prewarm()-on-email:
-    // the slow /funnels/start (backend generates the reading) + checkout + iframe load all
-    // finish in the background, so the pay-button click reveals an already-loaded form
-    // instantly. prewarmCheckout guards on status, so this runs once. Gated on a known price
-    // so the prewarmed checkout matches the paywall price (else the reveal falls back to a
-    // fresh load). If the price isn't set until the paywall, the fallback below covers it.
-    if (prewarm.status === 'idle') {
-      try {
-        var em0 = getEmail();
-        var pr0 = (typeof M.getPrice === 'function' ? M.getPrice() : null);
-        if (em0 && pr0 != null) prewarmCheckout(em0, pr0, 'full');
-      } catch (e) {}
-    }
+    // (A) EARLY, price-independent: prewarm the slow reading generation as soon as the quiz
+    // data + palm photo are ready (well before the paywall). No price, no OdysPay checkout,
+    // no transaction — just caches session.id so the on-paywall checkout is fast. This is the
+    // real reason soulmate's form is instant: the heavy /funnels/start is already done.
+    prewarmStart();
+
     var on = false; try { on = CFG.isPayScreen(); } catch (e) {}
     if (!on) return;
     if (!_leadFired) { _leadFired = true; track('lead', { screen_id: 'paywall' }); }
-    // Fallback: if the price only becomes known on the paywall itself, prewarm now.
+    // (B) On the paywall, prewarm the checkout + build the hidden form — but ONLY once the
+    // DEFINITIVE charge price (mg_charge_price, the exact value the pay click charges) is set.
+    // Gating on it guarantees prewarm.price === the click's _price → the click REVEALS the
+    // preloaded form (instant) and never creates a second checkout at a different price.
+    // (session.id from prewarmStart makes this checkout fast → the form preloads in time.)
     if (prewarm.status === 'idle') {
       try {
         var em = getEmail();
-        if (em) prewarmCheckout(em, (typeof M.getPrice === 'function' ? M.getPrice() : null), 'full');
+        var chg = null; try { chg = SS.getItem('mg_charge_price'); } catch (e) {}
+        var pr = (typeof M.getPrice === 'function' ? M.getPrice() : null);
+        if (em && chg && pr != null) prewarmCheckout(em, pr, 'full');
       } catch (e) {}
     }
   }
@@ -666,16 +686,11 @@
   M.fireViewContent = function (p) { track('view_content', p); };
   M.fireAddToCart = function (p) { track('add_to_cart', p); };
   M.track = track;
-  // Explicit prewarm hook (parity with the reference connector): the funnel can call
-  // MAGNORA.prewarm() the instant it has the email — the earliest, most reliable trigger
-  // for an instant pay form. Auto-prewarm in tick() covers funnels that don't call it.
-  M.prewarm = function () {
-    if (prewarm.status !== 'idle') return;
-    try {
-      var em = getEmail();
-      if (em) prewarmCheckout(em, (typeof M.getPrice === 'function' ? M.getPrice() : null), 'full');
-    } catch (e) {}
-  };
+  // Explicit prewarm hook: the funnel can call MAGNORA.prewarm() the instant the scan +
+  // answers are ready to kick off the slow reading generation early (price-independent, no
+  // checkout/transaction). The price-dependent checkout still runs once, on the paywall.
+  // Auto-prewarm in tick() already covers this, so the hook is optional/for early triggers.
+  M.prewarm = function () { try { prewarmStart(); } catch (e) {} };
 
   function start() {
     // Payment interception FIRST and isolated — it must bind even if anything else
