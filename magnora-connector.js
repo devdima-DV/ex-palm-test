@@ -430,16 +430,21 @@
     var s = document.createElement('style'); s.id = 'mg-el-css';
     s.textContent =
       '#mg-cn .box.mg-el{position:relative;max-width:440px;width:100%;max-height:94vh;overflow:auto;padding:22px 20px 18px;border-radius:20px;color:#1c1c1c;font-family:"Open Sans",system-ui,sans-serif;background:#fff;box-shadow:0 30px 90px rgba(20,16,40,.35)}' +
-      '#mg-cn .mg-el-x{position:absolute;top:14px;right:14px;border:0;width:34px;height:34px;border-radius:50%;background:#1c1430;color:#fff;font-size:14px;line-height:1;cursor:pointer;z-index:4}' +
-      '#mg-cn .mg-el-title{text-align:center;font:800 22px/1.25 "Open Sans",system-ui,-apple-system,sans-serif;color:#1c1c1c;margin:2px 24px 16px}' +
+      '#mg-cn .mg-el-x{position:absolute;top:16px;right:16px;border:0;width:34px;height:34px;border-radius:50%;background:#1c1430;color:#fff;font-size:14px;line-height:1;cursor:pointer;z-index:4}' +
+      '#mg-cn .mg-el-title{text-align:center;font:800 24px/1.25 "Open Sans",system-ui,-apple-system,sans-serif;color:#111;margin:4px 30px 18px}' +
       '#mg-cn .mg-el-express{margin-bottom:12px;min-height:1px}#mg-cn .mg-el-express:empty{display:none;margin:0}' +
-      '#mg-cn .mg-el-charge{text-align:center;color:#6b6575;font-size:13.5px;margin:0 0 16px}#mg-cn .mg-el-charge b{color:#1c1c1c;font-weight:700}' +
+      '#mg-cn .mg-el-charge{text-align:center;color:#6b6575;font-size:14px;margin:0 0 16px}#mg-cn .mg-el-charge b{color:#1c1c1c;font-weight:700}' +
       '#mg-cn .mg-el-pe{margin-bottom:2px}' +
       '#mg-cn .mg-el-err{color:#e5484d;font-size:12.5px;min-height:16px;margin:8px 2px 0}' +
-      '#mg-cn .mg-el-pay{margin-top:14px;width:100%;height:54px;border:0;border-radius:14px;cursor:pointer;font:700 16px "Open Sans",system-ui,-apple-system,sans-serif;color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#7b61ff,#5b3fe0);box-shadow:0 12px 30px rgba(91,63,224,.42)}' +
+      '#mg-cn .mg-el-pay{margin-top:16px;width:100%;height:54px;border:0;border-radius:14px;cursor:pointer;font:700 16px "Open Sans",system-ui,-apple-system,sans-serif;color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#7b61ff,#5b3fe0);box-shadow:0 10px 26px rgba(91,63,224,.4)}' +
       '#mg-cn .mg-el-pay:disabled{cursor:default;opacity:.7}' +
-      '#mg-cn .mg-el-stripe{text-align:center;color:#9a93a8;font-size:11.5px;margin:12px 0 2px}#mg-cn .mg-el-stripe b{color:#6b6575}' +
-      '#mg-cn .mg-el-load{position:absolute;inset:0;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;border-radius:20px;z-index:3}';
+      '#mg-cn .mg-el-pay:active{transform:translateY(1px)}' +
+      '#mg-cn .mg-el-stripe{display:flex;align-items:center;justify-content:center;gap:5px;color:#9a93a8;font-size:11.5px;margin:12px 0 2px}#mg-cn .mg-el-stripe b{color:#6b6575}' +
+      '#mg-cn .mg-el-load{position:absolute;inset:0;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;border-radius:20px;z-index:3}' +
+      // Bottom-sheet on phones (reference): full-width, anchored to the bottom, only the top
+      // corners rounded. The overlay is set to align-items:flex-end inline in buildElementsForm
+      // (survives revealPrewarm clearing the class).
+      '@media (max-width:540px){#mg-cn .box.mg-el{max-width:none;width:100%;border-radius:22px 22px 0 0;max-height:94vh;padding:20px 16px calc(18px + env(safe-area-inset-bottom))}#mg-cn .mg-el-load{border-radius:22px 22px 0 0}}';
     document.head.appendChild(s);
   }
   function elAmount(v) { var n = (v == null ? null : Number(v)); return (n != null && isFinite(n)) ? ('$' + n.toFixed(2)) : ''; }
@@ -452,12 +457,20 @@
       '<button class="mg-el-x" aria-label="Close">✕</button>' +
       '<h2 class="mg-el-title">Choose payment method</h2>' +
       '<div id="mg-express" class="mg-el-express"></div>' +
-      (amtStr ? '<p class="mg-el-charge">You will be charged <b>' + amtStr + '</b></p>' : '') +
+      (amtStr ? '<p class="mg-el-charge">You will be charged only <b>' + amtStr + '</b></p>' : '') +
       '<div id="mg-pe" class="mg-el-pe"></div>' +
       '<div class="mg-el-err" id="mg-el-err"></div>' +
       '<button class="mg-el-pay" id="mg-el-pay">' + (amtStr ? ('Pay ' + amtStr) : 'Pay') + '</button>' +
-      '<div class="mg-el-stripe">Powered by <b>Stripe</b></div>' +
+      '<div class="mg-el-stripe">🔒 Powered by <b>Stripe</b></div>' +
       '<div class="mg-el-load" id="mg-el-load"><div class="spin"></div></div>';
+    // Bottom-sheet anchoring on phones — set inline on the overlay so it survives revealPrewarm
+    // (which clears the overlay's className). No-op on desktop (stays a centered card).
+    try {
+      var _ov = box.parentNode;
+      if (_ov && _ov.id === 'mg-cn' && window.matchMedia && window.matchMedia('(max-width:540px)').matches) {
+        _ov.style.alignItems = 'flex-end'; _ov.style.padding = '0';
+      }
+    } catch (e) {}
     var closeBtn = box.querySelector('.mg-el-x'); if (closeBtn) closeBtn.addEventListener('click', payCloseHandler);
     var payBtn = box.querySelector('#mg-el-pay');
     var errEl = box.querySelector('#mg-el-err');
@@ -491,6 +504,15 @@
         try {
           var ece = sdk.createExpressCheckoutElement(); ece.mount(box.querySelector('#mg-express'));
           ece.on('confirm', function (ev) { doConfirm(ev); });
+          // Hide the express row when no wallet is available (desktop) so there's no empty bar;
+          // on iPhone/Android it shows Apple Pay / Google Pay.
+          ece.on('ready', function (e) {
+            try {
+              var m = e && e.availablePaymentMethods;
+              var any = m && (m.applePay || m.googlePay || m.link || m.paypal || (typeof m === 'object' && Object.keys(m).length));
+              if (!any) { var xe = box.querySelector('#mg-express'); if (xe) xe.style.display = 'none'; }
+            } catch (x) {}
+          });
         } catch (e) { var xe = box.querySelector('#mg-express'); if (xe) xe.style.display = 'none'; }
         if (payBtn) payBtn.addEventListener('click', function () { doConfirm(null); });
         dropLoader();
