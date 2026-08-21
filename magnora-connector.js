@@ -171,6 +171,10 @@
       '#mg-cn .mg-pay-x{border:0;width:34px;height:34px;border-radius:50%;padding:0;font-size:15px;line-height:1;cursor:pointer;background:#1c1430;color:#fff}' +
       // loader over the iframe (below the bar) until OdysPay paints; removed on iframe load
       '#mg-cn .mg-pay-load{position:absolute;left:0;right:0;top:46px;bottom:0;z-index:2;display:flex;align-items:center;justify-content:center;background:#fff}' +
+      // Phones: OdysPay renders its full-width MOBILE layout regardless of width, so widen the
+      // modal to nearly fill the screen (form fills the wider iframe). The 316px cap is only
+      // needed on DESKTOP (to force the mobile layout instead of their narrow centred card).
+      '@media (max-width:540px){#mg-cn{padding:9px}#mg-cn .box.mg-pay{max-width:480px;height:86vh;max-height:none}}' +
       '#mg-cn h2{font:700 21px/1.3 "Open Sans",system-ui,sans-serif;margin:0 0 6px;color:#1c1c1c}' +
       '#mg-cn p.sub{margin:0 0 16px;color:#6b6575;font-size:13.5px}' +
       '#mg-cn input{width:100%;box-sizing:border-box;background:#fff;border:1px solid #d8d1e4;border-radius:12px;padding:14px;color:#1c1c1c;font-size:15px;margin-bottom:10px}' +
