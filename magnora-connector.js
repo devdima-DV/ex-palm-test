@@ -320,11 +320,21 @@
     return startP
       .then(function (s) {
         saveSession(s.session_id, s.claim_token);
-        var body = { session_id: s.session_id, claim_token: s.claim_token, email: email, variant: variant || 'full' };
+        var body = { session_id: s.session_id, claim_token: s.claim_token, email: email, variant: variant || 'full',
+                     ui_mode: 'elements' };                // ask OdysPay for Stripe Elements creds (own form)
         if (price) body.price = price;                    // charge the user's selected price
         return post('/funnels/checkout', body);
       })
-      .then(function (co) { return co.payment_url; });
+      // Normalise into one checkout object. Elements creds present → native form; else → iframe.
+      .then(function (co) {
+        return {
+          payment_url: co.payment_url || co.iframe_url || null,
+          client_secret: co.stripe_client_secret || null,
+          pub_key: co.stripe_publishable_key || null,
+          ui_mode: co.stripe_ui_mode || null,
+          price: (price == null ? null : price),
+        };
+      });
   }
   // Downsell re-checkout: its own spinner card → OdysPay iframe.
   function startAndCheckout(email, price, variant) {
@@ -332,7 +342,7 @@
     var box = overlay();
     box.innerHTML = '<div class="spin"></div><p class="sub" style="text-align:center">' + T.waiting + '</p>';
     doStartCheckout(email, price, variant)
-      .then(function (url) { showPayment(url); })
+      .then(function (ck) { showPayment(ck); })
       .catch(function () {
         box.innerHTML = '<h2 style="text-align:center">Magnora</h2><p class="err" id="e" style="text-align:center"></p><button class="cta" id="rt"></button>';
         box.querySelector('#e').textContent = T.err;
@@ -381,33 +391,156 @@
     box.insertBefore(wrap, L.load);                // order: bar, wrap(iframe), loader
     return f;
   }
+
+  // ── Custom native card form via Stripe Elements (OdysPay checkout_ui_mode=elements) ──
+  // When /funnels/checkout returns Stripe Elements creds we render OUR OWN Magnora-styled form
+  // (no hosted iframe, no dark bands) and confirm via Stripe. If anything is missing or fails,
+  // we fall back to the hosted iframe so payment always works.
+  var _stripeJsP = null;
+  function ensureStripeJs() {
+    if (window.Stripe) return Promise.resolve(window.Stripe);
+    if (_stripeJsP) return _stripeJsP;
+    _stripeJsP = new Promise(function (res, rej) {
+      var s = document.createElement('script');
+      s.src = 'https://js.stripe.com/dahlia/stripe.js'; s.async = true;   // OdysPay REQUIRES the dahlia build
+      s.onload = function () { window.Stripe ? res(window.Stripe) : rej(new Error('no Stripe')); };
+      s.onerror = function () { rej(new Error('stripe.js failed')); };
+      document.head.appendChild(s);
+    });
+    return _stripeJsP;
+  }
+  // Stripe Appearance API tuned to the Magnora cosmic palette (dark field, gold focus glow).
+  var MG_APPEARANCE = {
+    theme: 'night',
+    variables: {
+      colorPrimary: '#E8C37E', colorText: '#F4EFE7', colorTextSecondary: '#a79fbe',
+      colorTextPlaceholder: '#6f6788', colorDanger: '#ff8a8a', colorBackground: '#17112b',
+      fontFamily: '"Open Sans", system-ui, sans-serif', borderRadius: '12px', spacingUnit: '4px',
+    },
+    rules: {
+      '.Input': { backgroundColor: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: 'none', color: '#F4EFE7' },
+      '.Input:focus': { border: '1px solid rgba(246,217,140,0.55)', boxShadow: '0 0 0 3px rgba(246,217,140,0.12)' },
+      '.Input::placeholder': { color: '#6f6788' },
+      '.Label': { color: '#a79fbe', fontWeight: '600' },
+      '.Tab, .Block': { backgroundColor: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.12)' },
+      '.Tab:hover': { color: '#F4EFE7' },
+      '.Tab--selected': { borderColor: 'rgba(246,217,140,0.55)', color: '#F4EFE7' },
+    },
+  };
+  function ensureElCss() {
+    if (document.getElementById('mg-el-css')) return;
+    ensureSerif();                                   // Cormorant Garamond for the amount
+    var s = document.createElement('style'); s.id = 'mg-el-css';
+    s.textContent =
+      '#mg-cn .box.mg-el{position:relative;max-width:432px;width:100%;max-height:94vh;overflow:auto;padding:24px 22px 18px;border-radius:24px;color:#F4EFE7;font-family:"Open Sans",system-ui,sans-serif;background:radial-gradient(120% 80% at 50% -8%,rgba(139,109,255,.16),transparent 55%),linear-gradient(180deg,rgba(31,23,58,.98),rgba(17,11,33,.99));border:1px solid rgba(233,197,132,.16);box-shadow:0 40px 120px rgba(8,5,20,.7)}' +
+      '#mg-cn .box.mg-el::after{content:"";position:absolute;left:10%;right:10%;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(233,197,132,.28),transparent)}' +
+      '#mg-cn .mg-el-x{position:absolute;top:14px;right:14px;border:0;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.08);color:#F4EFE7;font-size:14px;line-height:1;cursor:pointer;z-index:4}' +
+      '#mg-cn .mg-el-secure{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7d7597;border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:5px 11px}' +
+      '#mg-cn .mg-el-brand{margin:16px 0 2px;font:600 13px "Open Sans";letter-spacing:.4em;text-transform:uppercase;color:#F4EFE7}' +
+      '#mg-cn .mg-el-brand span{color:#F6D98C;margin-right:6px}' +
+      '#mg-cn .mg-el-amount{font-family:"Cormorant Garamond",serif;font-weight:700;line-height:1;font-size:52px;margin:8px 0 4px;background:linear-gradient(180deg,#fff,#F6D98C 55%,#D9A94E);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}' +
+      '#mg-cn .mg-el-sub{color:#a79fbe;font-size:13px;margin:0 0 18px}' +
+      '#mg-cn .mg-el-express{margin-bottom:14px}#mg-cn .mg-el-express:empty{display:none;margin:0}' +
+      '#mg-cn .mg-el-pe{margin-bottom:2px}' +
+      '#mg-cn .mg-el-err{color:#ff8a8a;font-size:12.5px;min-height:16px;margin:8px 2px 0}' +
+      '#mg-cn .mg-el-pay{margin-top:14px;width:100%;height:54px;border:0;border-radius:15px;cursor:pointer;font:700 16px "Open Sans";color:#2a1b05;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(180deg,#F6D98C,#D9A94E);box-shadow:0 12px 34px rgba(217,169,78,.42),0 0 0 1px rgba(255,255,255,.25) inset}' +
+      '#mg-cn .mg-el-pay:disabled{cursor:default;opacity:.7}' +
+      '#mg-cn .mg-el-trust{display:flex;align-items:center;justify-content:center;gap:7px;margin:14px 0 2px;color:#7d7597;font-size:12px}' +
+      '#mg-cn .mg-el-stripe{text-align:center;color:#7d7597;font-size:11.5px;margin:9px 0 2px}#mg-cn .mg-el-stripe b{color:#b9b1cc}' +
+      '#mg-cn .mg-el-load{position:absolute;inset:0;background:rgba(17,11,33,.86);display:flex;align-items:center;justify-content:center;border-radius:24px;z-index:3}';
+    document.head.appendChild(s);
+  }
+  function elAmount(v) { var n = (v == null ? null : Number(v)); return (n != null && isFinite(n)) ? ('$' + n.toFixed(2)) : ''; }
+  // Build the Magnora shell, then mount Stripe's PaymentElement + ExpressCheckoutElement into it.
+  function buildElementsForm(box, checkout) {
+    ensureElCss();
+    box.className = 'box mg-el'; box.innerHTML = '';
+    var amtStr = elAmount(checkout && checkout.price != null ? checkout.price : buyer.price);
+    box.innerHTML =
+      '<button class="mg-el-x" aria-label="Close">✕</button>' +
+      '<span class="mg-el-secure">🔒 ' + (T.elSecure || 'Secure checkout') + '</span>' +
+      '<div class="mg-el-brand"><span>✦</span>MAGNORA</div>' +
+      '<div class="mg-el-amount">' + (amtStr || '&nbsp;') + '</div>' +
+      '<p class="mg-el-sub">' + (T.elSub || 'Full access — cancel anytime.') + '</p>' +
+      '<div id="mg-express" class="mg-el-express"></div>' +
+      '<div id="mg-pe" class="mg-el-pe"></div>' +
+      '<div class="mg-el-err" id="mg-el-err"></div>' +
+      '<button class="mg-el-pay" id="mg-el-pay">' + (amtStr ? ('Pay ' + amtStr) : (T.pay || 'Pay')) + '</button>' +
+      '<div class="mg-el-trust">✓ ' + (T.elTrust || 'Guaranteed secure & encrypted payment') + '</div>' +
+      '<div class="mg-el-stripe">Powered by <b>Stripe</b></div>' +
+      '<div class="mg-el-load" id="mg-el-load"><div class="spin"></div></div>';
+    var closeBtn = box.querySelector('.mg-el-x'); if (closeBtn) closeBtn.addEventListener('click', payCloseHandler);
+    var payBtn = box.querySelector('#mg-el-pay');
+    var errEl = box.querySelector('#mg-el-err');
+    var loadEl = box.querySelector('#mg-el-load');
+    function showErr(m) { if (errEl) errEl.textContent = m || ''; }
+    function busy(b) { if (payBtn) payBtn.disabled = !!b; }
+    function dropLoader() { if (loadEl && loadEl.parentNode) loadEl.parentNode.removeChild(loadEl); }
+    var RU = CFG.site + '/claim?session=' + encodeURIComponent(session.id || '') + '&token=' + encodeURIComponent(session.token || '');
+    function onPaid() {                              // mirror the iframe postMessage success path
+      if (buyer.variant === 'discount') track('downsell_accept', { value: buyer.price });
+      track('purchase', { value: buyer.price, screen_id: 'payment_modal' });
+      postPaid();
+    }
+    ensureStripeJs().then(function (Stripe) {
+      var stripe = Stripe(checkout.pub_key);
+      var sdk = stripe.initCheckoutElementsSdk({ clientSecret: checkout.client_secret, elementsOptions: { appearance: MG_APPEARANCE } });
+      return sdk.loadActions().then(function (loaded) {
+        if (!loaded || loaded.type !== 'success') throw new Error((loaded && loaded.error && loaded.error.message) || 'load failed');
+        var actions = loaded.actions;
+        function doConfirm(ev) {
+          busy(true); showErr('');
+          var opts = { returnUrl: RU }; if (ev) opts.expressCheckoutConfirmEvent = ev;
+          actions.confirm(opts).then(function (r) {
+            if (r && r.error) { showErr(r.error.message || 'Payment failed'); busy(false); return; }
+            onPaid();                                // resolved without a redirect → success inline
+          }).catch(function (err) { showErr(String(err && err.message || err)); busy(false); });
+        }
+        try { sdk.createPaymentElement().mount(box.querySelector('#mg-pe')); } catch (e) {}
+        try {
+          var ece = sdk.createExpressCheckoutElement(); ece.mount(box.querySelector('#mg-express'));
+          ece.on('confirm', function (ev) { doConfirm(ev); });
+        } catch (e) { var xe = box.querySelector('#mg-express'); if (xe) xe.style.display = 'none'; }
+        if (payBtn) payBtn.addEventListener('click', function () { doConfirm(null); });
+        dropLoader();
+      });
+    }).catch(function () {
+      // Elements unavailable/failed → seamless fallback to the hosted iframe.
+      dropLoader();
+      box.className = 'box mg-pay'; box.innerHTML = '';
+      buildPayBox(box, checkout && checkout.payment_url);
+    });
+  }
+  // Dispatch: native Elements form if OdysPay returned creds, else the hosted iframe.
+  function renderPay(box, checkout) {
+    if (checkout && checkout.client_secret && checkout.pub_key) { buildElementsForm(box, checkout); return; }
+    box.className = 'box mg-pay'; box.innerHTML = '';
+    buildPayBox(box, checkout && checkout.payment_url);
+  }
   // Open the pay modal IMMEDIATELY on click with a single loader, then drop the OdysPay
   // iframe in once the payment_url is ready — reusing the in-flight prewarm checkout if it
   // matches (no second spinner). Used when the form wasn't fully preloaded yet at click.
   function openPayNow(email, price, variant) {
     buyer.email = email; buyer.price = (price == null ? null : price); buyer.variant = variant || 'full';
-    var box = overlay(); box.className = 'box mg-pay';       // open immediately (reference modal)
-    addPayBar(box);                                           // white bar + close
-    var wrap = document.createElement('div'); wrap.className = 'mg-pay-wrap';
-    var L = addPayLoader(box);                                // loader over the iframe area
-    box.insertBefore(wrap, L.load);                          // order: bar, wrap, loader
+    var box = overlay(); box.className = 'box mg-pay';       // open immediately
+    box.innerHTML = '<div class="mg-pay-load"><div class="spin"></div></div>';   // brief loader until checkout resolves
     track('payment_attempt');                                // form shown due to the button click
-    var urlP;
+    var ckP;
     if (prewarm.status === 'loading' && prewarm.promise && prewarm.price === (price == null ? null : price)) {
-      prewarm.claimed = true; urlP = prewarm.promise;         // reuse the checkout already in flight
-    } else { urlP = doStartCheckout(email, price, variant); }
-    urlP.then(function (url) {
-      var f = document.createElement('iframe'); f.setAttribute('allow', 'payment');
-      L.onIframe(f); f.src = url; wrap.appendChild(f);           // iframe into the wrap; loader stays on top
+      prewarm.claimed = true; ckP = prewarm.promise;         // reuse the checkout already in flight
+    } else { ckP = doStartCheckout(email, price, variant); }
+    ckP.then(function (ck) {
+      if (ck && ck.price == null) ck.price = (price == null ? null : price);
+      renderPay(box, ck);                                     // native Elements form, or iframe fallback
     }).catch(function () {
       box.className = 'box';                                  // back to the normal padded card for the error
       box.innerHTML = '<h2 style="text-align:center">Magnora</h2><p class="err" style="text-align:center">' + T.err + '</p><button class="cta" id="rt">' + T.cont + '</button>';
       box.querySelector('#rt').addEventListener('click', function () { openPayNow(email, price, variant); });
     });
   }
-  function showPayment(url) {
-    track('payment_attempt');                   // Yandex-only goal (NOT Meta) — buyer reached the OdysPay form
-    buildPayBox(overlay(), url);
+  function showPayment(checkout) {
+    track('payment_attempt');                   // Yandex-only goal (NOT Meta) — buyer reached the pay form
+    renderPay(overlay(), checkout);
   }
 
   // ── Prewarm the OdysPay FORM before the click (fully preloaded) ──
@@ -417,7 +550,7 @@
   // even on a cold cache. Trade-off (chosen deliberately): OdysPay's own form-load beacon
   // fires at prewarm, not on the click. Our own payment_attempt goal still fires on the
   // click reveal (revealPrewarm), so funnel analytics stay click-accurate.
-  var prewarm = { status: 'idle', price: null, variant: 'full', url: null, overlay: null, promise: null, claimed: false };
+  var prewarm = { status: 'idle', price: null, variant: 'full', checkout: null, overlay: null, promise: null, claimed: false };
   // ── Prewarm ONLY the reading generation (price-independent) ──
   // /funnels/start is the slow call (~20-40s: the backend generates the whole reading) and
   // needs NO price and NO OdysPay checkout — so it's safe to run early (as soon as the quiz
@@ -432,6 +565,7 @@
   var _pcDone = false;
   function preconnect() {
     if (_pcDone) return; _pcDone = true;
+    try { ensureStripeJs(); } catch (e) {}          // start loading the Elements SDK early (dahlia build)
     try {
       ['https://odyssey-pay.com', 'https://js.stripe.com', 'https://api.stripe.com'].forEach(function (href) {
         ['preconnect', 'dns-prefetch'].forEach(function (rel) {
@@ -464,17 +598,17 @@
     prewarm.status = 'loading'; prewarm.price = (price == null ? null : price); prewarm.variant = variant || 'full'; prewarm.claimed = false;
     prewarm.promise = doStartCheckout(email, price, variant);
     prewarm.promise
-      .then(function (url) {
-        prewarm.url = url;
+      .then(function (ck) {
+        prewarm.checkout = ck;
         if (prewarm.claimed) { prewarm.status = 'consumed'; return; }                 // a fast click already grabbed the checkout → it fills its own modal
         if (document.getElementById('mg-cn')) { prewarm.status = 'idle'; return; }    // a real overlay opened meanwhile → abort quietly
         css();
         var ov = document.createElement('div'); ov.id = 'mg-cn'; ov.className = 'mg-prewarm-hidden'; if (RTL) ov.dir = 'rtl';
         var box = document.createElement('div'); ov.appendChild(box); document.body.appendChild(ov);
-        buildPayBox(box, url);                      // iframe loads NOW, in the background (hidden)
+        renderPay(box, ck);                         // form (Elements) or iframe loads NOW, in the background (hidden)
         prewarm.overlay = ov; prewarm.status = 'ready';
       })
-      .catch(function () { prewarm.status = 'failed'; prewarm.url = null; prewarm.overlay = null; });
+      .catch(function () { prewarm.status = 'failed'; prewarm.checkout = null; prewarm.overlay = null; });
   }
   // Reveal the preloaded form on the pay-button click: un-hide the already-loaded overlay
   // (instant) and fire payment_attempt HERE, on the click-driven display.
