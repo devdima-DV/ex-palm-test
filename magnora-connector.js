@@ -660,25 +660,65 @@
         openPayNow(getEmail(), _price);
       } catch (x) {}
     }, true);
+    // Predictive preload (instant.page pattern): the instant the buyer reaches for the pay
+    // button — hover on desktop, finger-down on mobile — arm the hidden form preload. This
+    // fires before the dwell timer and well before the `click`, so on desktop the form is
+    // fully loaded by the time they click (0 ms reveal). Same once-guard → still one pending,
+    // and only for buyers who actually engage the button.
+    ['pointerdown', 'touchstart', 'mouseover'].forEach(function (evt) {
+      document.addEventListener(evt, function (e) {
+        try {
+          if (prewarm.status !== 'idle') return;
+          var t = e.target && e.target.closest && e.target.closest('button,a,[role="button"],[data-testid]');
+          if (!t) return;
+          var txt = (t.textContent || '').trim().toLowerCase();
+          if (!txt || txt.length > 60 || !re.test(txt)) return;
+          armPrewarm();
+        } catch (x) {}
+      }, true);
+    });
+  }
+
+  // ── Arm the hidden form preload → truly instant reveal on click, EXACTLY ONE pending ──
+  // The OdysPay form == the /funnels/checkout == the pending (their hosted page creates the
+  // Stripe intent up front; we can't defer it). So an instant form necessarily needs the
+  // checkout done before the click. To avoid a pending on every paywall view we arm it only
+  // on a real intent signal (see callers): a dwell on the paywall, or the buyer physically
+  // reaching for the pay button (pointerdown/touchstart/hover — the instant.page pattern).
+  // The status guard makes it fire ONCE; the click then REVEALS the preloaded form (0 ms) and
+  // never runs a second checkout. Gated on mg_charge_price (the definitive charge price the
+  // click will use) so prewarm.price === the click's price → the reveal matches, no 2nd trx.
+  function armPrewarm() {
+    if (prewarm.status !== 'idle') return;              // once — idempotent, one pending max
+    try {
+      var em = getEmail(); if (!em) return;             // checkout needs the collected email
+      var chg = null; try { chg = SS.getItem('mg_charge_price'); } catch (e) {}
+      if (!chg) return;                                 // wait for the FINAL price (else price mismatch → 2nd trx)
+      var pr = (typeof M.getPrice === 'function' ? M.getPrice() : null);
+      if (pr == null) return;
+      prewarmCheckout(em, pr, 'full');                  // builds the hidden, fully-loaded form
+    } catch (e) {}
   }
 
   // Fire Lead when a recognisable paywall screen is shown (best-effort analytics).
+  var _pwSince = 0;
   function tick() {
-    // Warm the payment hosts' TLS early (no request, no pending) so the click-time form paints fast.
+    // Warm the payment hosts' TLS early (no request, no pending) so the form paints fast.
     preconnect();
-    // Prewarm ONLY the slow reading generation (price-independent, creates NO OdysPay pending),
-    // as soon as the quiz data + palm photo are ready. Caches session.id so the click-time
-    // checkout is fast.
+    // Prewarm ONLY the slow reading generation (price-independent, creates NO pending) so the
+    // checkout that follows is fast. Caches session.id.
     prewarmStart();
 
     var on = false; try { on = CFG.isPayScreen(); } catch (e) {}
-    if (!on) return;
+    if (!on) { _pwSince = 0; return; }
     if (!_leadFired) { _leadFired = true; track('lead', { screen_id: 'paywall' }); }
-    // NOTE: the checkout is deliberately NOT prewarmed. /funnels/checkout is what creates the
-    // OdysPay pending transaction, and we want EXACTLY ONE pending per buyer, created at the
-    // moment the payment form is shown — i.e. on the pay-button click (openPayNow → checkout).
-    // Prewarming it here would spawn a pending on every paywall view. The click-time checkout
-    // is fast because session.id (start) is already warmed and the TLS is preconnected.
+    // Dwell gate (real 600ms, not tick-count — tick also fires on DOM mutations): arm the form
+    // preload only after the buyer has genuinely settled on the paywall, so a paywall that
+    // merely flashes past during navigation never spawns a pending. This preloads the hidden
+    // form seconds before any click → instant reveal on BOTH mobile and desktop. (The pay-button
+    // intent listener arms it even earlier on hover/touch.)
+    if (!_pwSince) _pwSince = Date.now();
+    else if (Date.now() - _pwSince >= 600) armPrewarm();
   }
   function loadPricing() {
     fetch(CFG.api + '/funnels/pricing?funnel=' + encodeURIComponent(CFG.funnel))
