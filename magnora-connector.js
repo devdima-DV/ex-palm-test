@@ -159,10 +159,11 @@
       '#mg-cn.mg-prewarm-hidden{visibility:hidden;opacity:0;pointer-events:none}' +
       '#mg-cn .box{background:#fff;border:1px solid #ece8f3;border-radius:20px;max-width:440px;width:100%;max-height:92vh;overflow:auto;color:#1c1c1c;padding:24px;box-shadow:0 24px 80px rgba(20,16,40,.28)}' +
       // Pay modal: white top bar + close, OdysPay iframe below (80vh), rounded box.
-      // Width 316px is BELOW OdysPay's desktop-layout breakpoint (~320px), so their form
-      // uses its full-width MOBILE layout and fills the modal — no dark page-bg side bands,
-      // on desktop too — while staying wide enough that email/name don't truncate.
-      '#mg-cn .box.mg-pay{max-width:316px;height:82vh;max-height:740px;padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative;background:#fff}' +
+      // Width 520px = the reference Magnora layout (soulmate-sketch etc.): OdysPay renders its
+      // WIDE desktop card (full card number, all brand icons, comfortable fields). On desktop
+      // this leaves thin dark page-bg bands beside the card (same as every reference funnel);
+      // on phones the viewport caps it and OdysPay fills with its mobile layout.
+      '#mg-cn .box.mg-pay{max-width:520px;height:82vh;max-height:760px;padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative;background:#fff}' +
       // iframe lives in a wrap and is nudged up 36px so OdysPay's dark top page-padding is
       // cropped and its form sits flush under the bar (no dark seam between bar and form).
       '#mg-cn .mg-pay-wrap{position:relative;flex:1 1 auto;min-height:0;overflow:hidden}' +
@@ -174,7 +175,7 @@
       // Phones: OdysPay renders its full-width MOBILE layout regardless of width, so widen the
       // modal to nearly fill the screen (form fills the wider iframe). The 316px cap is only
       // needed on DESKTOP (to force the mobile layout instead of their narrow centred card).
-      '@media (max-width:540px){#mg-cn{padding:9px}#mg-cn .box.mg-pay{max-width:480px;height:86vh;max-height:none}}' +
+      '@media (max-width:540px){#mg-cn{padding:9px}#mg-cn .box.mg-pay{max-width:520px;height:86vh;max-height:none}}' +
       '#mg-cn h2{font:700 21px/1.3 "Open Sans",system-ui,sans-serif;margin:0 0 6px;color:#1c1c1c}' +
       '#mg-cn p.sub{margin:0 0 16px;color:#6b6575;font-size:13.5px}' +
       '#mg-cn input{width:100%;box-sizing:border-box;background:#fff;border:1px solid #d8d1e4;border-radius:12px;padding:14px;color:#1c1c1c;font-size:15px;margin-bottom:10px}' +
@@ -624,11 +625,24 @@
 
   // Fire Lead when a recognisable paywall screen is shown (best-effort analytics).
   function tick() {
+    // Prewarm as EARLY as possible — the moment email AND price are known, even several
+    // screens before the paywall. Mirrors soulmate-sketch's MAGNORA.prewarm()-on-email:
+    // the slow /funnels/start (backend generates the reading) + checkout + iframe load all
+    // finish in the background, so the pay-button click reveals an already-loaded form
+    // instantly. prewarmCheckout guards on status, so this runs once. Gated on a known price
+    // so the prewarmed checkout matches the paywall price (else the reveal falls back to a
+    // fresh load). If the price isn't set until the paywall, the fallback below covers it.
+    if (prewarm.status === 'idle') {
+      try {
+        var em0 = getEmail();
+        var pr0 = (typeof M.getPrice === 'function' ? M.getPrice() : null);
+        if (em0 && pr0 != null) prewarmCheckout(em0, pr0, 'full');
+      } catch (e) {}
+    }
     var on = false; try { on = CFG.isPayScreen(); } catch (e) {}
     if (!on) return;
     if (!_leadFired) { _leadFired = true; track('lead', { screen_id: 'paywall' }); }
-    // Prewarm the OdysPay form the moment the paywall is shown (email was collected
-    // earlier in the funnel). Runs once; the pay-button click then shows it instantly.
+    // Fallback: if the price only becomes known on the paywall itself, prewarm now.
     if (prewarm.status === 'idle') {
       try {
         var em = getEmail();
@@ -652,6 +666,16 @@
   M.fireViewContent = function (p) { track('view_content', p); };
   M.fireAddToCart = function (p) { track('add_to_cart', p); };
   M.track = track;
+  // Explicit prewarm hook (parity with the reference connector): the funnel can call
+  // MAGNORA.prewarm() the instant it has the email — the earliest, most reliable trigger
+  // for an instant pay form. Auto-prewarm in tick() covers funnels that don't call it.
+  M.prewarm = function () {
+    if (prewarm.status !== 'idle') return;
+    try {
+      var em = getEmail();
+      if (em) prewarmCheckout(em, (typeof M.getPrice === 'function' ? M.getPrice() : null), 'full');
+    } catch (e) {}
+  };
 
   function start() {
     // Payment interception FIRST and isolated — it must bind even if anything else
