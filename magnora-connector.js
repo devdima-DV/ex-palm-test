@@ -682,43 +682,39 @@
   // ── Arm the hidden form preload → truly instant reveal on click, EXACTLY ONE pending ──
   // The OdysPay form == the /funnels/checkout == the pending (their hosted page creates the
   // Stripe intent up front; we can't defer it). So an instant form necessarily needs the
-  // checkout done before the click. To avoid a pending on every paywall view we arm it only
-  // on a real intent signal (see callers): a dwell on the paywall, or the buyer physically
-  // reaching for the pay button (pointerdown/touchstart/hover — the instant.page pattern).
-  // The status guard makes it fire ONCE; the click then REVEALS the preloaded form (0 ms) and
-  // never runs a second checkout. Gated on mg_charge_price (the definitive charge price the
-  // click will use) so prewarm.price === the click's price → the reveal matches, no 2nd trx.
+  // checkout done before the click. We arm it the MOMENT the buyer has CHOSEN their price:
+  // getPrice() becomes non-null on the trialChoice screen — ONE screen before the paywall —
+  // and nothing sets a price earlier, so this is a clean "purchase-intent" signal (a full
+  // screen of lead time, not a paywall-view flash). The status guard fires it ONCE; the click
+  // then REVEALS the already-loaded form (~0 ms) and never runs a second checkout. Because the
+  // chosen price IS the price the paywall charges, prewarm.price === the click's price → the
+  // reveal matches, no second trx.
   function armPrewarm() {
     if (prewarm.status !== 'idle') return;              // once — idempotent, one pending max
     try {
       var em = getEmail(); if (!em) return;             // checkout needs the collected email
-      var chg = null; try { chg = SS.getItem('mg_charge_price'); } catch (e) {}
-      if (!chg) return;                                 // wait for the FINAL price (else price mismatch → 2nd trx)
       var pr = (typeof M.getPrice === 'function' ? M.getPrice() : null);
-      if (pr == null) return;
+      if (pr == null) return;                           // price not chosen yet (trialPrice unset) → wait
       prewarmCheckout(em, pr, 'full');                  // builds the hidden, fully-loaded form
     } catch (e) {}
   }
 
   // Fire Lead when a recognisable paywall screen is shown (best-effort analytics).
-  var _pwSince = 0;
   function tick() {
     // Warm the payment hosts' TLS early (no request, no pending) so the form paints fast.
     preconnect();
     // Prewarm ONLY the slow reading generation (price-independent, creates NO pending) so the
     // checkout that follows is fast. Caches session.id.
     prewarmStart();
+    // Arm the hidden form preload the MOMENT the buyer has chosen their price — getPrice()
+    // turns non-null on the trialChoice screen, ONE screen before the paywall. That full screen
+    // of lead (transition + paywall render + reading time) lets the ~2s checkout+iframe finish
+    // BEFORE they can click → instant reveal, NO loader. armPrewarm self-guards (once).
+    armPrewarm();
 
     var on = false; try { on = CFG.isPayScreen(); } catch (e) {}
-    if (!on) { _pwSince = 0; return; }
+    if (!on) return;
     if (!_leadFired) { _leadFired = true; track('lead', { screen_id: 'paywall' }); }
-    // Dwell gate (real 600ms, not tick-count — tick also fires on DOM mutations): arm the form
-    // preload only after the buyer has genuinely settled on the paywall, so a paywall that
-    // merely flashes past during navigation never spawns a pending. This preloads the hidden
-    // form seconds before any click → instant reveal on BOTH mobile and desktop. (The pay-button
-    // intent listener arms it even earlier on hover/touch.)
-    if (!_pwSince) _pwSince = Date.now();
-    else if (Date.now() - _pwSince >= 600) armPrewarm();
   }
   function loadPricing() {
     fetch(CFG.api + '/funnels/pricing?funnel=' + encodeURIComponent(CFG.funnel))
