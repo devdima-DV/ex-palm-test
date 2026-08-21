@@ -431,12 +431,12 @@
     s.textContent =
       '#mg-cn .box.mg-el{position:relative;max-width:440px;width:100%;max-height:94vh;overflow:auto;padding:22px 20px 18px;border-radius:20px;color:#1c1c1c;font-family:"Open Sans",system-ui,sans-serif;background:#fff;box-shadow:0 30px 90px rgba(20,16,40,.35)}' +
       '#mg-cn .mg-el-x{position:absolute;top:14px;right:14px;border:0;width:34px;height:34px;border-radius:50%;background:#1c1430;color:#fff;font-size:14px;line-height:1;cursor:pointer;z-index:4}' +
-      '#mg-cn .mg-el-title{text-align:center;font:800 22px/1.25 "Open Sans";color:#1c1c1c;margin:2px 24px 16px}' +
+      '#mg-cn .mg-el-title{text-align:center;font:800 22px/1.25 "Open Sans",system-ui,-apple-system,sans-serif;color:#1c1c1c;margin:2px 24px 16px}' +
       '#mg-cn .mg-el-express{margin-bottom:12px;min-height:1px}#mg-cn .mg-el-express:empty{display:none;margin:0}' +
       '#mg-cn .mg-el-charge{text-align:center;color:#6b6575;font-size:13.5px;margin:0 0 16px}#mg-cn .mg-el-charge b{color:#1c1c1c;font-weight:700}' +
       '#mg-cn .mg-el-pe{margin-bottom:2px}' +
       '#mg-cn .mg-el-err{color:#e5484d;font-size:12.5px;min-height:16px;margin:8px 2px 0}' +
-      '#mg-cn .mg-el-pay{margin-top:14px;width:100%;height:54px;border:0;border-radius:14px;cursor:pointer;font:700 16px "Open Sans";color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#7b61ff,#5b3fe0);box-shadow:0 12px 30px rgba(91,63,224,.42)}' +
+      '#mg-cn .mg-el-pay{margin-top:14px;width:100%;height:54px;border:0;border-radius:14px;cursor:pointer;font:700 16px "Open Sans",system-ui,-apple-system,sans-serif;color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#7b61ff,#5b3fe0);box-shadow:0 12px 30px rgba(91,63,224,.42)}' +
       '#mg-cn .mg-el-pay:disabled{cursor:default;opacity:.7}' +
       '#mg-cn .mg-el-stripe{text-align:center;color:#9a93a8;font-size:11.5px;margin:12px 0 2px}#mg-cn .mg-el-stripe b{color:#6b6575}' +
       '#mg-cn .mg-el-load{position:absolute;inset:0;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;border-radius:20px;z-index:3}';
