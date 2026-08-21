@@ -473,7 +473,7 @@
     }
     ensureStripeJs().then(function (Stripe) {
       var stripe = Stripe(checkout.pub_key);
-      var sdk = stripe.initCheckoutElementsSdk({ clientSecret: checkout.client_secret, elementsOptions: { appearance: MG_APPEARANCE, locale: 'en' } });
+      var sdk = stripe.initCheckoutElementsSdk({ clientSecret: checkout.client_secret, elementsOptions: { appearance: MG_APPEARANCE } });
       return sdk.loadActions().then(function (loaded) {
         if (!loaded || loaded.type !== 'success') throw new Error((loaded && loaded.error && loaded.error.message) || 'load failed');
         var actions = loaded.actions;
